@@ -2,15 +2,15 @@
 #define LLVM_ANALYSIS_TAINTTRACKING_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/DenseSet.h"
 #include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/PassManager.h"
 
 namespace llvm {
 
 class TaintedRegisters {
 public:
-  using ValueSet = SmallPtrSet<Value *, 4>;
+  using ConstValueSet = SmallPtrSet<const Value *, 4>;
 
   /// Construct an empty TaintedRegisters object.
   TaintedRegisters(const Function &F) : F(F) {}
@@ -19,7 +19,7 @@ public:
   ///
   /// This returns the cached value if taint analysis has previously 
   /// been completed, otherwise it processes it first.
-  const ValueSet &getTaintedRegisters();
+  const ConstValueSet &getTaintedRegisters();
 
   /// Free the memory used by this class.
   void releaseMemory();
@@ -28,21 +28,19 @@ public:
   void print(raw_ostream &OS) const;
 
 private:
-  using ConstValueSet = SmallPtrSet<const Value *, 4>;
-
   /// The function we are performing taint analysis on.
   const Function &F;
 
-  /// Maps values to their list of users for quick look-up
+  /// CURRENTLY NOT USED, Maps values to their list of users
   DenseMap<const Value *, ConstValueSet> DefUseMap;
 
-  ValueSet TaintedRegisterSet;
+  ConstValueSet TaintedRegisterSet;
 
-  /// Iterates through function and populates DefUseMap
+  /// CURRENTLY NOT USED, Iterates through function and populates DefUseMap
   void populateDefUseMap();
 
-  /// Propagate tainted data when used in other instructions
-  void propagateTaintedRegisters(const Argument *Arg);
+  /// Assumes input is tainted and propagates taint to other values
+  void propagateTaintedRegisters(const Argument *TaintedArg);
 };
 
 /// The analysis pass which yields a TaintedRegisters

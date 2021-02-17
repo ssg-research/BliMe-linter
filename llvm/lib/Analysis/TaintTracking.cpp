@@ -2,11 +2,11 @@
 
 using namespace llvm;
 
-const TaintedRegisters::ValueSet &TaintedRegisters::getTaintedRegisters() {
+const TaintedRegisters::ConstValueSet &TaintedRegisters::getTaintedRegisters() {
   if (TaintedRegisterSet.empty() && DefUseMap.empty()) {
     populateDefUseMap();
-    for (auto arg = F.arg_begin(); arg < F.arg_end(); ++arg) {
-      propagateTaintedRegisters(arg);
+    for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
+      propagateTaintedRegisters(Arg);
     }
   }
   return TaintedRegisterSet;
@@ -30,12 +30,26 @@ void TaintedRegisters::print(raw_ostream &OS) const {
   for (const auto &Pair : DefUseMap) {
     OS << *Pair.first << " is used in instructions:\n";
     for (const auto *Inst : Pair.second) {
-      OS << *Inst << "\n";
+      OS << "  " << *Inst << "\n";
     }
+  }
+
+  OS << "Argument Users:" << "\n";
+  for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
+    OS << *Arg << " has users:\n";
+    for (const User *U : Arg->users()) {
+      OS << "  " << *U << "\n";
+    }
+  }
+
+  OS << "Tainted Registers:" << "\n";
+  for (const Value *Val : TaintedRegisterSet) {
+    OS << *Val << "\n";
   }
 
 }
 
+// Currently unused, probably unnecessary
 void TaintedRegisters::populateDefUseMap() {
   for (const BasicBlock &BB : F) {
     for (const Instruction &Inst : BB) {
@@ -49,8 +63,31 @@ void TaintedRegisters::populateDefUseMap() {
   }
 }
 
-void TaintedRegisters::propagateTaintedRegisters(const Argument *Arg) {
+void TaintedRegisters::propagateTaintedRegisters(const Argument *TaintedArg) {
+  SmallVector<const Value *, 16> Worklist;
+  Worklist.push_back(TaintedArg);
 
+  while (!Worklist.empty()) {
+    const Value *CurrentVal = Worklist.pop_back_val();
+    TaintedRegisterSet.insert(CurrentVal);
+
+    for (const User *U : CurrentVal->users()) {
+
+      // We can define more fine tuned propagation rules here
+      // We can cast to specific instruction subclasses and handle
+      // each case
+
+      if (const StoreInst *UStore = dyn_cast<StoreInst>(U)) {
+        const Value *StoreAddr = UStore->getPointerOperand();
+        if (StoreAddr != CurrentVal)
+          Worklist.push_back(StoreAddr);
+      }
+
+      if (const Value *UVal = dyn_cast<Value>(U)) {
+        Worklist.push_back(UVal);
+      }
+    }
+  }
 }
 
 AnalysisKey TaintTrackingAnalysis::Key;
