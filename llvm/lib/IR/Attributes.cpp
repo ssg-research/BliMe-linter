@@ -445,6 +445,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "immarg";
   if (hasAttribute(Attribute::NoUndef))
     return "noundef";
+  if (hasAttribute(Attribute::Blinded))
+    return "blinded";
 
   if (hasAttribute(Attribute::ByVal)) {
     std::string Result;

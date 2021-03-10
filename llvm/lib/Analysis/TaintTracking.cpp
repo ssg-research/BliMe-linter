@@ -44,9 +44,15 @@ void TaintedRegisters::print(raw_ostream &OS) const {
 
   OS << "Tainted Registers:" << "\n";
   for (const Value *Val : TaintedRegisterSet) {
-    OS << *Val << "\n";
+    OS << "  " << *Val << "\n";
   }
 
+  OS << "Tainted Input:" << "\n";
+  for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
+    if (Arg->hasAttribute(Attribute::Blinded)) {
+      OS << "  " << *Arg << "\n";
+    }
+  }
 }
 
 // Currently unused, probably unnecessary
@@ -76,12 +82,6 @@ void TaintedRegisters::propagateTaintedRegisters(const Argument *TaintedArg) {
       // We can define more fine tuned propagation rules here
       // We can cast to specific instruction subclasses and handle
       // each case
-
-      if (const StoreInst *UStore = dyn_cast<StoreInst>(U)) {
-        const Value *StoreAddr = UStore->getPointerOperand();
-        if (StoreAddr != CurrentVal)
-          Worklist.push_back(StoreAddr);
-      }
 
       if (const Value *UVal = dyn_cast<Value>(U)) {
         Worklist.push_back(UVal);
