@@ -10654,6 +10654,9 @@ bool ASTContext::DeclMustBeEmitted(const Decl *D) {
         if (DeclMustBeEmitted(BindingVD))
           return true;
 
+  if (VD->hasAttr<BlindedAttr>())
+    return true;
+
   return false;
 }
 

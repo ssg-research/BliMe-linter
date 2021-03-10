@@ -2476,6 +2476,12 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
       auto AI = Fn->getArg(FirstIRArg);
       llvm::Type *LTy = ConvertType(Arg->getType());
 
+      // Set 'blinded' attribute if any.
+      if (const ParmVarDecl *PVD = dyn_cast<ParmVarDecl>(Arg))
+        if (PVD->hasAttr<BlindedAttr>()) {
+          AI->addAttr(llvm::Attribute::Blinded);
+        }
+
       // Prepare parameter attributes. So far, only attributes for pointer
       // parameters are prepared. See
       // http://llvm.org/docs/LangRef.html#paramattrs.

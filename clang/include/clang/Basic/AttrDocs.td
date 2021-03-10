@@ -4921,3 +4921,16 @@ Requirements on Development Tools - Engineering Specification Documentation
 <https://developer.arm.com/docs/ecm0359818/latest/>`_ for more information.
   }];
 }
+
+def BlindedDocs : Documentation {
+  let Category = DocCatVariable;
+  let Content = [{
+This attribute marks a variable as blinded. Backend analysis tracks blinded
+variables and verifies they are not leaked outside the current scope when
+written into blinded memory or passed as blinded arguments to functions.
+The backend verifies that no blinded data leaks to non-blinded variables, and
+that all instructions that handle blinded data are marked for proper handling
+at code generation. This assumes that the programmer annotates all variables
+(both dynamic and static)
+  }];
+}
