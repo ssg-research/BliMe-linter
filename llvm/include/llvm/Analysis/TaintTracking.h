@@ -5,6 +5,8 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/AliasSetTracker.h"
 
 namespace llvm {
 
@@ -13,13 +15,13 @@ public:
   using ConstValueSet = SmallPtrSet<const Value *, 4>;
 
   /// Construct an empty TaintedRegisters object.
-  TaintedRegisters(const Function &F) : F(F) {}
+  TaintedRegisters(Function &F) : F(F) {}
 
   /// Gets tainted registers in this function
   ///
   /// This returns the cached value if taint analysis has previously 
   /// been completed, otherwise it processes it first.
-  const ConstValueSet &getTaintedRegisters();
+  const ConstValueSet &getTaintedRegisters(AAResults *AA);
 
   /// Free the memory used by this class.
   void releaseMemory();
@@ -29,18 +31,15 @@ public:
 
 private:
   /// The function we are performing taint analysis on.
-  const Function &F;
-
-  /// CURRENTLY NOT USED, Maps values to their list of users
-  DenseMap<const Value *, ConstValueSet> DefUseMap;
+  Function &F;
 
   ConstValueSet TaintedRegisterSet;
 
-  /// CURRENTLY NOT USED, Iterates through function and populates DefUseMap
-  void populateDefUseMap();
-
   /// Assumes input is tainted and propagates taint to other values
-  void propagateTaintedRegisters(const Argument *TaintedArg);
+  void propagateTaintedRegisters(const Argument *TaintedArg,
+                                 AliasSetTracker *AST);
+
+  std::unique_ptr<AliasSetTracker> buildAliasSetTracker(AAResults *AA);
 };
 
 /// The analysis pass which yields a TaintedRegisters
