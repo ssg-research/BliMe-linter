@@ -120,13 +120,15 @@ PreservedAnalyses TaintTrackingPrinterPass::run(Function &F,
                                                 FunctionAnalysisManager &AM) {
 
   OS << "Taint Tracking for function: " << F.getName() << "\n";
-  auto &AA = AM.getResult<AAManager>(F);
-  auto &SteensAA = AM.getResult<CFLSteensAA>(F);
+  auto &AAResult = AM.getResult<AAManager>(F);
+  auto &BasicAAResult = AM.getResult<BasicAA>(F);
+  auto &SteensAAResult = AM.getResult<CFLSteensAA>(F);
   auto &TR = AM.getResult<TaintTrackingAnalysis>(F);
 
   // Add result of Steens AA to our AAManager
-  AA.addAAResult(SteensAA);
-  TR.getTaintedRegisters(&AA);
+  AAResult.addAAResult(SteensAAResult);
+  AAResult.addAAResult(BasicAAResult);
+  TR.getTaintedRegisters(&AAResult);
   TR.print(OS);
 
   PreservedAnalyses PA;
