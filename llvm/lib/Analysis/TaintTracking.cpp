@@ -1,6 +1,5 @@
 #include "llvm/Analysis/TaintTracking.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
-#include "llvm/Analysis/CFLAndersAliasAnalysis.h"
 #include "llvm/Analysis/CFLSteensAliasAnalysis.h"
 
 using namespace llvm;
@@ -125,7 +124,7 @@ PreservedAnalyses TaintTrackingPrinterPass::run(Function &F,
   auto &SteensAAResult = AM.getResult<CFLSteensAA>(F);
   auto &TR = AM.getResult<TaintTrackingAnalysis>(F);
 
-  // Add result of Steens AA to our AAManager
+  // Add result of SteensAA and BasicAA to our AAManager
   AAResult.addAAResult(SteensAAResult);
   AAResult.addAAResult(BasicAAResult);
   TR.getTaintedRegisters(&AAResult);
