@@ -1,4 +1,5 @@
 #include "llvm/Analysis/TaintTracking.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/CFLSteensAliasAnalysis.h"
 
@@ -7,15 +8,14 @@ using namespace llvm;
 std::unique_ptr<AliasSetTracker>
 TaintedRegisters::buildAliasSetTracker(AAResults *AA) {
   auto AST = std::make_unique<AliasSetTracker>(*AA);
-  for (BasicBlock &BB : F) {
-    for (Instruction &Inst : BB) {
+  for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+    Instruction &Inst = *I;
 
-      // Skip call instructions, they are currently beyond the
-      // scope of this pass and can potentially greatly reduce
-      // the accuracy of the AliasSets
-      if (!(isa<CallInst>(Inst) || isa<InvokeInst>(Inst))) {
-        AST->add(&Inst);
-      }
+    // Skip call instructions, they are currently beyond the
+    // scope of this pass and can potentially greatly reduce
+    // the accuracy of the AliasSets
+    if (!(isa<CallInst>(Inst) || isa<InvokeInst>(Inst))) {
+      AST->add(&Inst);
     }
   }
   return AST;
@@ -44,10 +44,8 @@ void TaintedRegisters::releaseMemory() {
 void TaintedRegisters::print(raw_ostream &OS) const {
 
   OS << "All instructions:" << "\n";
-  for (const BasicBlock &BB : F) {
-    for (const Instruction &Inst : BB) {
-      OS << Inst << "\n";
-    }
+  for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+    OS << *I << "\n";
   }
   OS << "\n";
 
