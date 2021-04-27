@@ -73,6 +73,37 @@ void TaintedRegisters::print(raw_ostream &OS) const {
   OS << "\n";
 }
 
+static bool isMultiplicationByZero(const BinaryOperator *BinOp) {
+  Value *FirstOperand = BinOp->getOperand(0);
+  Value *SecondOperand = BinOp->getOperand(1);
+  // 17 and 18 correspond to Mul and FMul operations respectively
+  if (BinOp->getOpcode() == 17) {
+    if (ConstantInt *CI = dyn_cast<ConstantInt>(FirstOperand)) {
+      if (CI->isZero()) {
+        return true;
+      }
+    }
+    if (ConstantInt *CI = dyn_cast<ConstantInt>(SecondOperand)) {
+      if (CI->isZero()) {
+        return true;
+      }
+    }
+  }
+  if (BinOp->getOpcode() == 18) {
+    if (ConstantFP *CFP = dyn_cast<ConstantFP>(FirstOperand)) {
+      if (CFP->isZero()) {
+        return true;
+      }
+    }
+    if (ConstantFP *CFP = dyn_cast<ConstantFP>(SecondOperand)) {
+      if (CFP->isZero()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void TaintedRegisters::propagateTaintedRegisters(const Argument *TaintedArg,
                                                  AliasSetTracker *AST) {
   SmallVector<const Value *, 16> Worklist;
@@ -88,8 +119,12 @@ void TaintedRegisters::propagateTaintedRegisters(const Argument *TaintedArg,
       // We can cast to specific instruction subclasses and handle
       // each case
 
+      if (const BinaryOperator *BinOp = dyn_cast<BinaryOperator>(U)) {
+        if (isMultiplicationByZero(BinOp)) {
+          continue;
+        }
+      }
       if (const StoreInst *SI = dyn_cast<StoreInst>(U)) {
-
         // if the pointer was allocated on the stack, then we can handle it
         if (isa<AllocaInst>(SI->getPointerOperand())) {
           auto &AS = AST->getAliasSetFor(MemoryLocation::get(SI));

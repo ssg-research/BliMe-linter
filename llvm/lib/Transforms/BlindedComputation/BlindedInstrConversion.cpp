@@ -12,10 +12,9 @@
 
 using namespace llvm;
 
-static SmallVector<Value *, 4> createGepIndexList(SmallVector<Value *, 16> &TI,
+static SmallVector<Value *, 4> createGepIndexList(Value *TaintedIdx,
                                                   GetElementPtrInst *GEP,
                                                   Value *NewIdx) {
-  Value *TaintedIdx = TI[0];
   SmallVector<Value *, 4> NewIndices;
   for (auto Idx = GEP->idx_begin(); Idx != GEP->idx_end(); ++Idx) {
     if (*Idx == TaintedIdx) {
@@ -34,7 +33,7 @@ void updateGEPAddrUsers(GetElementPtrInst *GEP, Value *NewOperand) {
   SmallSetVector<Value *, 16> WorkList;
   for (User *GEPUser : GEP->users()) {
     for (User *U : GEPUser->users()) {
-      for (int i = 0; i < U->getNumOperands(); ++i) {
+      for (unsigned int i = 0; i < U->getNumOperands(); ++i) {
         if (U->getOperand(i) == GEPUser) {
           U->setOperand(i, NewOperand);
         }
@@ -51,13 +50,12 @@ void updateGEPAddrUsers(GetElementPtrInst *GEP, Value *NewOperand) {
 }
 
 static bool expandBlindedArrayAccess(Function &F,
-                                     SmallVector<Value *, 16> &TI,
+                                     Value *TaintedIdx,
                                      GetElementPtrInst *GEP) {
   bool MadeChange = false;
 
   Type *GEPPtrType = GEP->getSourceElementType();
   auto GEPName = GEP->getPointerOperand()->getName();
-  Value *TaintedIdx = TI[0];
 
   if (GEPPtrType->isArrayTy()) {
     const uint64_t ArrSize = cast<ArrayType>(GEPPtrType)->getNumElements();
@@ -96,7 +94,7 @@ static bool expandBlindedArrayAccess(Function &F,
     Value *Zero = ConstantInt::get(Context, llvm::APInt(64, 0));
     auto GEPAddr = Builder.CreateGEP(GEPPtrType,
                                      GEP->getPointerOperand(),
-                                     createGepIndexList(TI, GEP, Zero),
+                                     createGepIndexList(TaintedIdx, GEP, Zero),
                                      GEPName + ".element.zero");
     auto GEPLoad = Builder.CreateLoad(GEP->getResultElementType(), GEPAddr);
 
@@ -117,7 +115,7 @@ static bool expandBlindedArrayAccess(Function &F,
 
     GEPAddr = Builder.CreateGEP(GEPPtrType,
                                 GEP->getPointerOperand(),
-                                createGepIndexList(TI, GEP, InducVar),
+                                createGepIndexList(TaintedIdx, GEP, InducVar),
                                 GEPName + ".blinded.addr");
     GEPLoad = Builder.CreateLoad(GEP->getResultElementType(), GEPAddr);
     auto SelectCmp = Builder.CreateCmp(CmpInst::ICMP_EQ, InducVar, TaintedIdx);
@@ -146,7 +144,7 @@ static bool expandBlindedArrayAccess(Function &F,
 static bool expandBlindedArrayAccesses(Function &F,
                                        TaintedRegisters::ConstValueSet TRSet) {
   bool MadeChange = false;
-  SmallSetVector<GetElementPtrInst *, 16> WorkList;
+  SmallVector<GetElementPtrInst *, 16> WorkList;
   SmallVector<Value *, 16> TaintedIndices;
 
   // Populate a worklist of GEPs so we do not invalidate our iterator
@@ -162,22 +160,25 @@ static bool expandBlindedArrayAccesses(Function &F,
         // look for a blinded index
         for (auto Idx = GEP->idx_begin(); Idx != GEP->idx_end(); ++Idx) {
           if (TRSet.contains(*Idx)) {
-            WorkList.insert(GEP);
+            WorkList.push_back(GEP);
             TaintedIndices.push_back(*Idx);
+            break; // Will need to be changed to handle multiple blinded indices
           }
         }
       }
     }
   }
 
-  // For now we only handle arrays with one blinded index
-  if (TaintedIndices.size() != 1) {
+  // For now we only handle one tainted index per array, multidimensional
+  // arrays with multiple blinded indices are not yet handled
+  if (TaintedIndices.size() != WorkList.size()) {
     return MadeChange;
   }
 
   while (!WorkList.empty()) {
     GetElementPtrInst *I = WorkList.pop_back_val();
-    MadeChange |= expandBlindedArrayAccess(F, TaintedIndices, I);
+    Value *TaintedIdx = TaintedIndices.pop_back_val();
+    MadeChange |= expandBlindedArrayAccess(F, TaintedIdx, I);
   }
 
   return MadeChange;
