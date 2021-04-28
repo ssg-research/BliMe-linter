@@ -8,6 +8,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Analysis/TaintTracking.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
+#include "llvm/Analysis/BlindedDataUsage.h"
 #include "llvm/Analysis/CFLSteensAliasAnalysis.h"
 
 using namespace llvm;
@@ -185,13 +186,25 @@ static bool expandBlindedArrayAccesses(Function &F,
 }
 
 /// This is the entry point for all transforms.
-static bool runImpl(Function &F, AAManager::Result &AA, TaintedRegisters &TR) {
+static bool runImpl(Function &F,
+                    AAManager::Result &AA,
+                    TaintedRegisters &TR,
+                    BlindedDataUsage &BDU) {
   bool MadeChange = false;
   auto &TaintedRegs = TR.getTaintedRegisters(&AA);
 
   MadeChange |= expandBlindedArrayAccesses(F, TaintedRegs);
 
   F.dump();
+
+  if (MadeChange) {
+    // Invalidate the TaintedRegisters, the next analysis result
+    // request will require re-running the analysis
+    TR.releaseMemory();
+  }
+
+  // Verify our blinded data usage policies
+  BDU.validateBlindedData(TR, AA);
 
   return MadeChange;
 }
@@ -203,12 +216,13 @@ PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
   auto &BasicAAResult = AM.getResult<BasicAA>(F);
   auto &SteensAAResult = AM.getResult<CFLSteensAA>(F);
   auto &TR = AM.getResult<TaintTrackingAnalysis>(F);
+  auto &BDU = AM.getResult<BlindedDataUsageAnalysis>(F);
 
   // Add result of SteensAA and BasicAA to our AAManager
   AAResult.addAAResult(SteensAAResult);
   AAResult.addAAResult(BasicAAResult);
 
-  if (!runImpl(F, AAResult, TR)) {
+  if (!runImpl(F, AAResult, TR, BDU)) {
     // No changes, all analyses are preserved.
     return PreservedAnalyses::all();
   }

@@ -111,6 +111,9 @@ void TaintedRegisters::propagateTaintedRegisters(const Argument *TaintedArg,
 
   while (!Worklist.empty()) {
     const Value *CurrentVal = Worklist.pop_back_val();
+    if (TaintedRegisterSet.contains(CurrentVal)) {
+      continue;
+    }
     TaintedRegisterSet.insert(CurrentVal);
 
     for (const User *U : CurrentVal->users()) {
@@ -144,7 +147,7 @@ void TaintedRegisters::propagateTaintedRegisters(const Argument *TaintedArg,
 
 AnalysisKey TaintTrackingAnalysis::Key;
 TaintedRegisters TaintTrackingAnalysis::run(Function &F,
-                                             FunctionAnalysisManager &AM) {
+                                            FunctionAnalysisManager &AM) {
   return TaintedRegisters(F);
 }
 
