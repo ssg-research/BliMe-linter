@@ -133,7 +133,7 @@ static bool expandBlindedArrayAccess(Function &F,
     auto LoopCondCmp = Builder.CreateCmp(CmpInst::ICMP_SLT, InducVar, ArrSizeVal);
     Builder.CreateCondBr(LoopCondCmp, LoopBodyBB, AfterLoopBB);
 
-    updateGEPAddrUsers(GEP, ArrElement);
+    updateGEPAddrUsers(GEP, SelectRes);
 
     GEP->eraseFromParent();
     MadeChange |= true;
@@ -195,6 +195,7 @@ static bool runImpl(Function &F,
 
   MadeChange |= expandBlindedArrayAccesses(F, TaintedRegs);
 
+  // TODO: we probably don't want to dump all instructions every time
   F.dump();
 
   if (MadeChange) {
