@@ -3447,6 +3447,6 @@ def ReleaseHandle : InheritableParamAttr {
 
 def Blinded : InheritableAttr {
   let Spellings = [Clang<"blinded">];
-  let Subjects = SubjectList<[ParmVar]>;
+  let Subjects = SubjectList<[ParmVar, GlobalVar]>;
   let Documentation = [BlindedDocs];
 }

@@ -733,6 +733,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_PREALLOCATED;
   case Attribute::NoUndef:
     return bitc::ATTR_KIND_NOUNDEF;
+  case Attribute::Blinded:
+    return bitc::ATTR_KIND_BLINDED;
   case Attribute::EndAttrKinds:
     llvm_unreachable("Can not encode end-attribute kinds marker.");
   case Attribute::None:
