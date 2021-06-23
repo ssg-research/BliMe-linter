@@ -36,7 +36,7 @@ private:
   ConstValueSet TaintedRegisterSet;
 
   /// Assumes input is tainted and propagates taint to other values
-  void propagateTaintedRegisters(const Argument *TaintedArg,
+  void propagateTaintedRegisters(const Value *TaintedArg,
                                  AliasSetTracker *AST);
 
   std::unique_ptr<AliasSetTracker> buildAliasSetTracker(AAResults *AA);

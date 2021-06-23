@@ -1359,6 +1359,7 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
       B.addPreallocatedAttr(Ty);
       break;
     }
+    case lltok::kw_blinded: B.addAttribute(Attribute::Blinded); break;
 
     // Error handling.
     case lltok::kw_inreg:

@@ -24,13 +24,20 @@ TaintedRegisters::buildAliasSetTracker(AAResults *AA) {
 const TaintedRegisters::ConstValueSet &
 TaintedRegisters::getTaintedRegisters(AAResults *AA) {
   if (TaintedRegisterSet.empty()) {
-
     auto AST = buildAliasSetTracker(AA);
     AST->dump();
 
     for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
       if (Arg->hasAttribute(Attribute::Blinded)) {
         propagateTaintedRegisters(Arg, AST.get());
+      }
+    }
+
+    if (Module *M = F.getParent()) {
+      Module::GlobalListType &GL = M->getGlobalList();
+      for (auto I = GL.begin(), E = GL.end(); I != E; ++I) {
+        GlobalVariable &GV = *I;
+        if (GV.hasAttribute(Attribute::Blinded)) propagateTaintedRegisters(&GV, AST.get());
       }
     }
   }
@@ -104,7 +111,7 @@ static bool isMultiplicationByZero(const BinaryOperator *BinOp) {
   return false;
 }
 
-void TaintedRegisters::propagateTaintedRegisters(const Argument *TaintedArg,
+void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
                                                  AliasSetTracker *AST) {
   SmallVector<const Value *, 16> Worklist;
   Worklist.push_back(TaintedArg);
@@ -123,23 +130,31 @@ void TaintedRegisters::propagateTaintedRegisters(const Argument *TaintedArg,
       // each case
 
       if (const BinaryOperator *BinOp = dyn_cast<BinaryOperator>(U)) {
-        if (isMultiplicationByZero(BinOp)) {
-          continue;
-        }
+        if (isMultiplicationByZero(BinOp)) continue;
       }
-      if (const StoreInst *SI = dyn_cast<StoreInst>(U)) {
-        // if the pointer was allocated on the stack, then we can handle it
-        if (isa<AllocaInst>(SI->getPointerOperand())) {
-          auto &AS = AST->getAliasSetFor(MemoryLocation::get(SI));
-          for (AliasSet::iterator ASI = AS.begin(), E = AS.end(); ASI != E; ++ASI) {
-            if (!TaintedRegisterSet.contains(ASI.getPointer())) {
-              Worklist.push_back(ASI.getPointer());
+
+      if (const Instruction *UInst = dyn_cast<Instruction>(U)) {
+        if (UInst->getFunction() != &F) continue;
+
+        if (const StoreInst *SI = dyn_cast<StoreInst>(UInst)) {
+          const Value *PO = SI->getPointerOperand();
+          // if the pointer was allocated on the stack or is a global, then we can handle it
+          if (isa<AllocaInst>(PO)) {
+            auto &AS = AST->getAliasSetFor(MemoryLocation::get(SI));
+            for (AliasSet::iterator ASI = AS.begin(), E = AS.end(); ASI != E; ++ASI) {
+              if (!TaintedRegisterSet.contains(ASI.getPointer())) {
+                Worklist.push_back(ASI.getPointer());
+              }
             }
+          } else if (const auto *GV = dyn_cast<GlobalVariable>(PO)) {
+            if (!GV->hasAttribute(Attribute::Blinded))
+              assert(false && "Invalid storage of blinded data in non-blinded memory!");
           }
+        } else {
+          Worklist.push_back(UInst);
         }
-      }
-      else if (const Instruction *UInst = dyn_cast<Instruction>(U)) {
-        Worklist.push_back(UInst);
+      } else if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {
+        Worklist.push_back(GV);
       }
     }
   }
