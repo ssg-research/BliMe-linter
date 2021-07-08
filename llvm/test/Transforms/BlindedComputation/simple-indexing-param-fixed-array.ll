@@ -9,17 +9,17 @@
 
 ; CHECK:       [[LOOPBODY]]:
 ; CHECK-NEXT:    [[INDUCVAR:%.*]] = phi i64 [ 0, [[ENTRY:%.*]] ], [ [[PREVINDUC:%.*]], %[[LOOPBODY]] ]
-; CHECK-NEXT:    [[CURELEMENT:%.*]] = phi i8 [ [[INITIALELEMENT:%.*]], [[ENTRY:%.*]] ], [ [[PREVELEMENT:%.*]], %[[LOOPBODY]] ]
+; CHECK-NEXT:    [[CURELEMENT:%.*]] = phi i8 [ [[INITIALELEMENT:%.*]], [[ENTRY]] ], [ [[PREVELEMENT:%.*]], %[[LOOPBODY]] ]
 ; CHECK-NEXT:    [[BLINDEDADDR:%.*]] = getelementptr [100 x i8], [100 x i8]* @arr, i64 0, i64 [[INDUCVAR]]
 ; CHECK-NEXT:    load i8, i8* [[BLINDEDADDR]], align 1
 ; CHECK-NEXT:    icmp eq i64 [[INDUCVAR]], [[INDEX:%.*]]
-; CHECK-NEXT:    select i1 [[COND:%.*]], i8 [[LOADRESULT:%.*]], i8 [[CURELEMENT]]
-; CHECK-NEXT:    add nsw i64 [[INDUCVAR]], 1
+; CHECK-NEXT:    [[RET:%.*]] = select i1 [[COND:%.*]], i8 [[LOADRESULT:%.*]], i8 [[CURELEMENT]]
+; CHECK-NEXT:    [[PREVINDUC]] = add nsw i64 [[INDUCVAR]], 1
 ; CHECK-NEXT:    icmp slt i64 [[INDUCVAR]], 100
 ; CHECK-NEXT:    br i1 [[BRCOND:%.*]], label %[[LOOPBODY]], label %[[AFTERLOOP:.*]]
 
 ; CHECK:       [[AFTERLOOP]]:
-; CHECK-NEXT:    ret i8 [[RET:%.*]]
+; CHECK-NEXT:    ret i8 [[RET]]
 
 ; Function Attrs: noinline nounwind optnone uwtable
 define dso_local signext i8 @accessArray(i32 blinded %index) #0 {
