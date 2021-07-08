@@ -113,7 +113,7 @@ static bool isMultiplicationByZero(const BinaryOperator *BinOp) {
 
 void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
                                                  AliasSetTracker *AST) {
-  SmallVector<const Value *, 16> Worklist;
+  SmallVector<const Value *, 64> Worklist;
   Worklist.push_back(TaintedArg);
 
   while (!Worklist.empty()) {

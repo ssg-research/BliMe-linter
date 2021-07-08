@@ -6,10 +6,12 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/ValueMap.h"
 #include "llvm/Analysis/TaintTracking.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/BlindedDataUsage.h"
 #include "llvm/Analysis/CFLSteensAliasAnalysis.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 
 using namespace llvm;
 
@@ -185,6 +187,89 @@ static bool expandBlindedArrayAccesses(Function &F,
   return MadeChange;
 }
 
+struct ToClone {
+  CallBase *CB;
+  Function *F;
+  SmallVector<unsigned, 32> ParamNos;
+};
+
+static bool propagateBlindedArgumentFunctionCalls(Function &F,
+                                                  TaintedRegisters::ConstValueSet TRSet) {
+  bool MadeChange = false;
+
+  SmallVector<ToClone, 16> WorkList;
+
+  for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+    Instruction &Inst = *I;
+
+    if (CallBase *CB = dyn_cast<CallBase>(&Inst)) {
+      if (TRSet.contains(CB)) {
+        if (Function *CF = CB->getCalledFunction()) {
+          ToClone TC = {.CB = CB, .F = CF};
+
+          // look for a blinded arguments going to non-blinded paramaters
+          for (auto Arg = CB->arg_begin(); Arg != CB->arg_end(); ++Arg) {
+            if (TRSet.contains(Arg->get())) {
+              unsigned ParamNo = CB->getArgOperandNo(Arg);
+              if (!CF->hasParamAttribute(ParamNo, Attribute::Blinded)) {
+                TC.ParamNos.push_back(ParamNo);
+              }
+            }
+          }
+
+          if (!TC.ParamNos.empty()) WorkList.push_back(TC);
+        } else {
+          // TODO(shazz): handle indirect function calls
+        }
+      }
+    }
+  }
+
+  while (!WorkList.empty()) {
+    ToClone TC = WorkList.pop_back_val();
+
+    if (TC.F->size() == 0) {
+      // TODO(shazz): handle functions defined outside of this module
+      continue;
+    }
+
+    unsigned BlindedParamIdentifier = 0;
+    for (unsigned ParamNo : TC.ParamNos) BlindedParamIdentifier |= 1 << ParamNo;
+    Twine BlindedFunctionName = TC.F->getName() + "." + Twine(BlindedParamIdentifier);
+
+    SmallString<128> BlindedFunctionNameVector;
+    Function *BlindedFunction = TC.F->getParent()->getFunction(BlindedFunctionName.toStringRef(BlindedFunctionNameVector));
+
+    if (!BlindedFunction) {
+      // blinded function does not already exist, create it
+      ValueMap<const Value *, WeakTrackingVH> Map;
+      std::vector<Type*> ArgTypes;
+      for (const Argument &I : TC.F->args()) ArgTypes.push_back(I.getType());
+      FunctionType *FTy = FunctionType::get(TC.F->getFunctionType()->getReturnType(), ArgTypes, TC.F->getFunctionType()->isVarArg());
+      // TODO(shazz): handle vararg functions?
+      BlindedFunction = Function::Create(FTy, TC.F->getLinkage(), TC.F->getAddressSpace(), BlindedFunctionName, TC.F->getParent());
+
+      Function::arg_iterator DestI = BlindedFunction->arg_begin();
+      for (const Argument &I : TC.F->args()) {
+        DestI->setName(I.getName());
+        Map[&I] = &*DestI++;
+      }
+
+      SmallVector<ReturnInst *, 8> Returns;
+      CloneFunctionInto(BlindedFunction, TC.F, Map, TC.F->getSubprogram() != nullptr, Returns, "", nullptr);
+
+      for (unsigned ParamNo : TC.ParamNos) {
+        BlindedFunction->addParamAttr(ParamNo, Attribute::Blinded);
+      }
+    }
+
+    TC.CB->setCalledFunction(BlindedFunction);
+    MadeChange |= true;
+  }
+
+  return MadeChange;
+}
+
 /// This is the entry point for all transforms.
 static bool runImpl(Function &F,
                     AAManager::Result &AA,
@@ -194,6 +279,7 @@ static bool runImpl(Function &F,
   auto &TaintedRegs = TR.getTaintedRegisters(&AA);
 
   MadeChange |= expandBlindedArrayAccesses(F, TaintedRegs);
+  MadeChange |= propagateBlindedArgumentFunctionCalls(F, TaintedRegs);
 
   // TODO: we probably don't want to dump all instructions every time
   F.dump();
