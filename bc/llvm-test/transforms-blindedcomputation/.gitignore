@@ -1,0 +1,8 @@
+*.o
+*.c.header
+*.c.body
+*.c.ll
+*.ll
+!FileCheck-header.ll
+!common.ll
+*.comments
