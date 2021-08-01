@@ -150,6 +150,13 @@ void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
             if (!GV->hasAttribute(Attribute::Blinded))
               assert(false && "Invalid storage of blinded data in non-blinded memory!");
           }
+        } else if (const CallBase *CB = dyn_cast<CallBase>(UInst)) {
+          if (Function *CF = CB->getCalledFunction()) {
+            if (CF->hasFnAttribute(Attribute::Blinded)) Worklist.push_back(UInst);
+          } else {
+            // assume return value from indirect function call is tainted
+            Worklist.push_back(UInst);
+          }
         } else {
           Worklist.push_back(UInst);
         }

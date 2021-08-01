@@ -145,8 +145,10 @@ static bool expandBlindedArrayAccess(Function &F,
 }
 
 static bool expandBlindedArrayAccesses(Function &F,
-                                       TaintedRegisters::ConstValueSet TRSet) {
-  bool MadeChange = false;
+                                       AAManager::Result &AA,
+                                       TaintedRegisters &TR) {
+  auto &TRSet = TR.getTaintedRegisters(&AA);
+
   SmallVector<GetElementPtrInst *, 16> WorkList;
   SmallVector<Value *, 16> TaintedIndices;
 
@@ -175,8 +177,10 @@ static bool expandBlindedArrayAccesses(Function &F,
   // For now we only handle one tainted index per array, multidimensional
   // arrays with multiple blinded indices are not yet handled
   if (TaintedIndices.size() != WorkList.size()) {
-    return MadeChange;
+    return false;
   }
+
+  bool MadeChange = false;
 
   while (!WorkList.empty()) {
     GetElementPtrInst *I = WorkList.pop_back_val();
@@ -184,111 +188,128 @@ static bool expandBlindedArrayAccesses(Function &F,
     MadeChange |= expandBlindedArrayAccess(F, TaintedIdx, I);
   }
 
-  return MadeChange;
-}
-
-struct ToClone {
-  CallBase *CB;
-  Function *F;
-  SmallVector<unsigned, 32> ParamNos;
-};
-
-static bool propagateBlindedArgumentFunctionCalls(Function &F,
-                                                  TaintedRegisters::ConstValueSet TRSet) {
-  bool MadeChange = false;
-
-  SmallVector<ToClone, 16> WorkList;
-
-  for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-    Instruction &Inst = *I;
-
-    if (CallBase *CB = dyn_cast<CallBase>(&Inst)) {
-      if (TRSet.contains(CB)) {
-        if (Function *CF = CB->getCalledFunction()) {
-          ToClone TC = {.CB = CB, .F = CF};
-
-          // look for a blinded arguments going to non-blinded paramaters
-          for (auto Arg = CB->arg_begin(); Arg != CB->arg_end(); ++Arg) {
-            if (TRSet.contains(Arg->get())) {
-              unsigned ParamNo = CB->getArgOperandNo(Arg);
-              if (!CF->hasParamAttribute(ParamNo, Attribute::Blinded)) {
-                TC.ParamNos.push_back(ParamNo);
-              }
-            }
-          }
-
-          if (!TC.ParamNos.empty()) WorkList.push_back(TC);
-        } else {
-          // TODO(shazz): handle indirect function calls
-        }
-      }
-    }
-  }
-
-  while (!WorkList.empty()) {
-    ToClone TC = WorkList.pop_back_val();
-
-    if (TC.F->size() == 0) {
-      // TODO(shazz): handle functions defined outside of this module
-      continue;
-    }
-
-    unsigned BlindedParamIdentifier = 0;
-    for (unsigned ParamNo : TC.ParamNos) BlindedParamIdentifier |= 1 << ParamNo;
-    Twine BlindedFunctionName = TC.F->getName() + "." + Twine(BlindedParamIdentifier);
-
-    SmallString<128> BlindedFunctionNameVector;
-    Function *BlindedFunction = TC.F->getParent()->getFunction(BlindedFunctionName.toStringRef(BlindedFunctionNameVector));
-
-    if (!BlindedFunction) {
-      // blinded function does not already exist, create it
-      ValueMap<const Value *, WeakTrackingVH> Map;
-      std::vector<Type*> ArgTypes;
-      for (const Argument &I : TC.F->args()) ArgTypes.push_back(I.getType());
-      FunctionType *FTy = FunctionType::get(TC.F->getFunctionType()->getReturnType(), ArgTypes, TC.F->getFunctionType()->isVarArg());
-      // TODO(shazz): handle vararg functions?
-      BlindedFunction = Function::Create(FTy, TC.F->getLinkage(), TC.F->getAddressSpace(), BlindedFunctionName, TC.F->getParent());
-
-      Function::arg_iterator DestI = BlindedFunction->arg_begin();
-      for (const Argument &I : TC.F->args()) {
-        DestI->setName(I.getName());
-        Map[&I] = &*DestI++;
-      }
-
-      SmallVector<ReturnInst *, 8> Returns;
-      CloneFunctionInto(BlindedFunction, TC.F, Map, TC.F->getSubprogram() != nullptr, Returns, "", nullptr);
-
-      for (unsigned ParamNo : TC.ParamNos) {
-        BlindedFunction->addParamAttr(ParamNo, Attribute::Blinded);
-      }
-    }
-
-    TC.CB->setCalledFunction(BlindedFunction);
-    MadeChange |= true;
-  }
-
-  return MadeChange;
-}
-
-/// This is the entry point for all transforms.
-static bool runImpl(Function &F,
-                    AAManager::Result &AA,
-                    TaintedRegisters &TR,
-                    BlindedDataUsage &BDU) {
-  bool MadeChange = false;
-  auto &TaintedRegs = TR.getTaintedRegisters(&AA);
-
-  MadeChange |= expandBlindedArrayAccesses(F, TaintedRegs);
-  MadeChange |= propagateBlindedArgumentFunctionCalls(F, TaintedRegs);
-
-  // TODO: we probably don't want to dump all instructions every time
-  F.dump();
-
   if (MadeChange) {
     // Invalidate the TaintedRegisters, the next analysis result
     // request will require re-running the analysis
     TR.releaseMemory();
   }
+
+  return MadeChange;
+}
+
+void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &CB,
+                                                                      Function &F,
+                                                                      ArrayRef<unsigned> ParamNos,
+                                                                      FunctionAnalysisManager &AM) {
+  if (F.size() == 0) {
+    // TODO(shazz): handle functions defined outside of this module
+    return;
+  }
+
+  unsigned BlindedParamIdentifier = 0;
+  for (unsigned ParamNo : ParamNos) BlindedParamIdentifier |= 1 << ParamNo;
+  Twine BlindedFunctionName = F.getName() + "." + Twine(BlindedParamIdentifier);
+
+  SmallString<128> BlindedFunctionNameVector;
+  Function *BlindedFunction = F.getParent()->getFunction(BlindedFunctionName.toStringRef(BlindedFunctionNameVector));
+
+  if (!BlindedFunction) {
+    // blinded function does not already exist, create it
+    ValueMap<const Value *, WeakTrackingVH> Map;
+    std::vector<Type*> ArgTypes;
+    for (const Argument &I : F.args()) ArgTypes.push_back(I.getType());
+    FunctionType *FTy = FunctionType::get(F.getFunctionType()->getReturnType(), ArgTypes, F.getFunctionType()->isVarArg());
+    // TODO(shazz): handle vararg functions?
+    BlindedFunction = Function::Create(FTy, F.getLinkage(), F.getAddressSpace(), BlindedFunctionName, F.getParent());
+
+    Function::arg_iterator DestI = BlindedFunction->arg_begin();
+    for (const Argument &I : F.args()) {
+      DestI->setName(I.getName());
+      Map[&I] = &*DestI++;
+    }
+
+    SmallVector<ReturnInst *, 8> Returns;
+    CloneFunctionInto(BlindedFunction, &F, Map, F.getSubprogram() != nullptr, Returns, "", nullptr);
+
+    for (unsigned ParamNo : ParamNos) {
+      BlindedFunction->addParamAttr(ParamNo, Attribute::Blinded);
+    }
+
+    AM.invalidate(*BlindedFunction, run(*BlindedFunction, AM));
+  }
+
+  CB.setCalledFunction(BlindedFunction);
+}
+
+void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(Function &F,
+                                                                       AAManager::Result &AA,
+                                                                       TaintedRegisters &TR,
+                                                                       FunctionAnalysisManager &AM) {
+  while (true) {
+    bool KeepGoing = false;
+    auto *TRSet = &TR.getTaintedRegisters(&AA);
+
+    for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      Instruction &Inst = *I;
+
+      if (CallBase *CB = dyn_cast<CallBase>(&Inst)) {
+        if (Function *CF = CB->getCalledFunction()) {
+          // look for blinded arguments going to non-blinded paramaters
+          SmallVector<unsigned, 8> ParamNos;
+          for (auto Arg = CB->arg_begin(); Arg != CB->arg_end(); ++Arg) {
+            if (TRSet->contains(Arg->get())) {
+              unsigned ParamNo = CB->getArgOperandNo(Arg);
+              if (!CF->hasParamAttribute(ParamNo, Attribute::Blinded)) {
+                ParamNos.push_back(ParamNo);
+              }
+            }
+          }
+
+          if (!ParamNos.empty()) {
+            // TODO(shazz): handle cycles
+            propagateBlindedArgumentFunctionCall(*CB, *CF, ParamNos, AM);
+
+            if (CF->hasFnAttribute(Attribute::Blinded) != TRSet->contains(CF)) {
+              TR.releaseMemory();
+              KeepGoing = true;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (!KeepGoing) break;
+  }
+}
+
+static void markBlindedIfNecessary(Function &F, AAManager::Result &AA, TaintedRegisters &TR) {
+  auto &TRSet = TR.getTaintedRegisters(&AA);
+  for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+    Instruction &Inst = *I;
+    if (isa<ReturnInst>(&Inst) && TRSet.contains(&Inst)) {
+      F.addFnAttr(Attribute::Blinded);
+      return;
+    }
+  }
+  F.removeFnAttr(Attribute::Blinded);
+}
+
+/// This is the entry point for all transforms.
+bool BlindedInstrConversionPass::runImpl(Function &F,
+                    AAManager::Result &AA,
+                    TaintedRegisters &TR,
+                    BlindedDataUsage &BDU,
+                    FunctionAnalysisManager &AM) {
+  bool MadeChange = false;
+
+  MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
+  propagateBlindedArgumentFunctionCalls(F, AA, TR, AM);
+  MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
+  markBlindedIfNecessary(F, AA, TR);
+
+  // TODO: we probably don't want to dump all instructions every time
+  F.dump();
 
   // Verify our blinded data usage policies
   BDU.validateBlindedData(TR, AA);
@@ -298,7 +319,6 @@ static bool runImpl(Function &F,
 
 PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
                                                   FunctionAnalysisManager &AM) {
-
   auto &AAResult = AM.getResult<AAManager>(F);
   auto &BasicAAResult = AM.getResult<BasicAA>(F);
   auto &SteensAAResult = AM.getResult<CFLSteensAA>(F);
@@ -309,7 +329,7 @@ PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
   AAResult.addAAResult(SteensAAResult);
   AAResult.addAAResult(BasicAAResult);
 
-  if (!runImpl(F, AAResult, TR, BDU)) {
+  if (!runImpl(F, AAResult, TR, BDU, AM)) {
     // No changes, all analyses are preserved.
     return PreservedAnalyses::all();
   }
@@ -318,6 +338,44 @@ PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
   PA.preserve<AAManager>();
   PA.preserve<BasicAA>();
   PA.preserve<CFLSteensAA>();
+
+  return PA;
+}
+
+PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
+                                                  ModuleAnalysisManager &AM) {
+  FunctionAnalysisManager &FAM =
+      AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+
+  PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
+
+  PreservedAnalyses PA = PreservedAnalyses::all();
+
+  SmallVector<Function *, 8> WorkList;
+  for (Function &F : M) {
+    WorkList.push_back(&F);
+  }
+
+  while (!WorkList.empty()) {
+    Function *F = WorkList.pop_back_val();
+
+    if (F->isDeclaration())
+      continue;
+
+    if (!PI.runBeforePass<Function>(*this, *F))
+      continue;
+
+    PreservedAnalyses PassPA;
+    {
+      TimeTraceScope TimeScope(name(), F->getName());
+      PassPA = run(*F, FAM);
+    }
+
+    PI.runAfterPass(*this, *F);
+
+    FAM.invalidate(*F, PassPA);
+    PA.intersect(std::move(PassPA));
+  }
 
   return PA;
 }

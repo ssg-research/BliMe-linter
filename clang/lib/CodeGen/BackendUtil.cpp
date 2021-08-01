@@ -1200,7 +1200,7 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
     bool IsThinLTO = CodeGenOpts.PrepareForThinLTO;
     bool IsLTO = CodeGenOpts.PrepareForLTO;
 
-    MPM.addPass(createModuleToFunctionPassAdaptor(BlindedInstrConversionPass()));
+    MPM.addPass(BlindedInstrConversionPass());
 
     if (CodeGenOpts.OptimizationLevel == 0) {
       // If we reached here with a non-empty index file name, then the index
