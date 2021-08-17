@@ -1,0 +1,14 @@
+int arr[100];
+
+int accessArray(int idx, int idx2, int idx3) {
+	return arr[idx] + arr[idx2] + arr[idx3];
+}
+
+int useKey(__attribute__((blinded)) int idx) {
+	return accessArray(idx, 1, 1) + accessArray(1, idx, 1) + accessArray(1, 1, idx) + accessArray(2 * idx, 0, idx + 1) + accessArray(idx, idx, idx)
+		+ accessArray(2 * idx, 3 * idx, idx + 5);
+}
+
+int main() {
+	return useKey(5);
+}
