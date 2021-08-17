@@ -197,13 +197,20 @@ static bool expandBlindedArrayAccesses(Function &F,
   return MadeChange;
 }
 
-void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &CB,
+bool BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &CB,
                                                                       Function &F,
                                                                       ArrayRef<unsigned> ParamNos,
-                                                                      FunctionAnalysisManager &AM) {
+                                                                      FunctionAnalysisManager &AM,
+                                                                      SmallSet<Function *, 8> &VisitedFunctions) {
   if (F.size() == 0) {
-    // TODO(shazz): handle functions defined outside of this module
-    return;
+    // assume functions outside of this module will not return tainted values
+    return false;
+  }
+
+  if (F.getFunctionType()->isVarArg()) {
+    // assume that vararg functions will return tainted values
+    // TODO: we can do something more sophisticated here
+    return true;
   }
 
   unsigned BlindedParamIdentifier = 0;
@@ -213,13 +220,17 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &
   SmallString<128> BlindedFunctionNameVector;
   Function *BlindedFunction = F.getParent()->getFunction(BlindedFunctionName.toStringRef(BlindedFunctionNameVector));
 
+  if (VisitedFunctions.count(BlindedFunction)) {
+    // we have a cycle, assume the return value from the function being called will be tainted
+    return true;
+  }
+
   if (!BlindedFunction) {
     // blinded function does not already exist, create it
     ValueMap<const Value *, WeakTrackingVH> Map;
     std::vector<Type*> ArgTypes;
     for (const Argument &I : F.args()) ArgTypes.push_back(I.getType());
     FunctionType *FTy = FunctionType::get(F.getFunctionType()->getReturnType(), ArgTypes, F.getFunctionType()->isVarArg());
-    // TODO(shazz): handle vararg functions?
     BlindedFunction = Function::Create(FTy, F.getLinkage(), F.getAddressSpace(), BlindedFunctionName, F.getParent());
 
     Function::arg_iterator DestI = BlindedFunction->arg_begin();
@@ -235,16 +246,19 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &
       BlindedFunction->addParamAttr(ParamNo, Attribute::Blinded);
     }
 
-    AM.invalidate(*BlindedFunction, run(*BlindedFunction, AM));
+    AM.invalidate(*BlindedFunction, run(*BlindedFunction, AM, VisitedFunctions));
   }
 
   CB.setCalledFunction(BlindedFunction);
+
+  return BlindedFunction->hasFnAttribute(Attribute::Blinded);
 }
 
 void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(Function &F,
                                                                        AAManager::Result &AA,
                                                                        TaintedRegisters &TR,
-                                                                       FunctionAnalysisManager &AM) {
+                                                                       FunctionAnalysisManager &AM,
+                                                                       SmallSet<Function *, 8> &VisitedFunctions) {
   while (true) {
     bool KeepGoing = false;
     auto *TRSet = &TR.getTaintedRegisters(&AA);
@@ -266,11 +280,14 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(Function 
           }
 
           if (!ParamNos.empty()) {
-            // TODO(shazz): handle cycles
-            propagateBlindedArgumentFunctionCall(*CB, *CF, ParamNos, AM);
+            bool IsReturnBlinded = propagateBlindedArgumentFunctionCall(*CB, *CF, ParamNos, AM, VisitedFunctions);
 
-            if (CF->hasFnAttribute(Attribute::Blinded) != TRSet->contains(CF)) {
+            if (TRSet->contains(CB) && !IsReturnBlinded) {
               TR.releaseMemory();
+              KeepGoing = true;
+              break;
+            } else if (!TRSet->contains(CB) && IsReturnBlinded) {
+              TR.explicitlyTaint(CB);
               KeepGoing = true;
               break;
             }
@@ -300,25 +317,31 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
                     AAManager::Result &AA,
                     TaintedRegisters &TR,
                     BlindedDataUsage &BDU,
-                    FunctionAnalysisManager &AM) {
+                    FunctionAnalysisManager &AM,
+                    SmallSet<Function *, 8> &VisitedFunctions) {
+  VisitedFunctions.insert(&F);
+
   bool MadeChange = false;
 
   MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
-  propagateBlindedArgumentFunctionCalls(F, AA, TR, AM);
+  propagateBlindedArgumentFunctionCalls(F, AA, TR, AM, VisitedFunctions);
   MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
   markBlindedIfNecessary(F, AA, TR);
 
   // TODO: we probably don't want to dump all instructions every time
-  F.dump();
+  // F.dump();
 
   // Verify our blinded data usage policies
   BDU.validateBlindedData(TR, AA);
+
+  VisitedFunctions.erase(&F);
 
   return MadeChange;
 }
 
 PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
-                                                  FunctionAnalysisManager &AM) {
+                                                  FunctionAnalysisManager &AM,
+                                                  SmallSet<Function *, 8> &VisitedFunctions) {
   auto &AAResult = AM.getResult<AAManager>(F);
   auto &BasicAAResult = AM.getResult<BasicAA>(F);
   auto &SteensAAResult = AM.getResult<CFLSteensAA>(F);
@@ -329,7 +352,7 @@ PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
   AAResult.addAAResult(SteensAAResult);
   AAResult.addAAResult(BasicAAResult);
 
-  if (!runImpl(F, AAResult, TR, BDU, AM)) {
+  if (!runImpl(F, AAResult, TR, BDU, AM, VisitedFunctions)) {
     // No changes, all analyses are preserved.
     return PreservedAnalyses::all();
   }
@@ -367,8 +390,9 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
 
     PreservedAnalyses PassPA;
     {
+      SmallSet<Function *, 8> VisitedFunctions;
       TimeTraceScope TimeScope(name(), F->getName());
-      PassPA = run(*F, FAM);
+      PassPA = run(*F, FAM, VisitedFunctions);
     }
 
     PI.runAfterPass(*this, *F);

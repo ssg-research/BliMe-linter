@@ -21,11 +21,16 @@ TaintedRegisters::buildAliasSetTracker(AAResults *AA) {
   return AST;
 }
 
+void TaintedRegisters::explicitlyTaint(const Value *Value) {
+  ExplicitlyMarkedTainted.insert(Value);
+  propagateTaintedRegisters(Value, AST.get());
+}
+
 const TaintedRegisters::ConstValueSet &
 TaintedRegisters::getTaintedRegisters(AAResults *AA) {
   if (TaintedRegisterSet.empty()) {
-    auto AST = buildAliasSetTracker(AA);
-    AST->dump();
+    AST = buildAliasSetTracker(AA);
+    // AST->dump();
 
     for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
       if (Arg->hasAttribute(Attribute::Blinded)) {
@@ -39,6 +44,10 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
         GlobalVariable &GV = *I;
         if (GV.hasAttribute(Attribute::Blinded)) propagateTaintedRegisters(&GV, AST.get());
       }
+    }
+
+    for (const Value *Val : ExplicitlyMarkedTainted) {
+      propagateTaintedRegisters(Val, AST.get());
     }
   }
   return TaintedRegisterSet;
@@ -186,7 +195,7 @@ PreservedAnalyses TaintTrackingPrinterPass::run(Function &F,
   AAResult.addAAResult(SteensAAResult);
   AAResult.addAAResult(BasicAAResult);
   TR.getTaintedRegisters(&AAResult);
-  TR.print(OS);
+  // TR.print(OS);
 
   PreservedAnalyses PA;
   PA.preserve<CFLSteensAA>();
