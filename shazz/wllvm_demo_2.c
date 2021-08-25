@@ -1,3 +1,3 @@
-int add(int a, int b) {
-	return a + b;
+int transform(int num) {
+	return num + 1;
 }

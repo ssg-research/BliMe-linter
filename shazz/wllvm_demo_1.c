@@ -1,5 +1,7 @@
-int isDoublePositive(__attribute__((blinded)) int num) {
-	if (add(num, num) > 0) {
+__attribute__((blinded)) int blinded = 5;
+
+int isPositiveAfterTransform(int num) {
+	if (transform(num) > 0) { // return of `transform(num)` should be tainted so this should not compile
 		return 1;
 	} else {
 		return 0;
@@ -7,5 +9,5 @@ int isDoublePositive(__attribute__((blinded)) int num) {
 }
 
 int main() {
-	return isDoublePositive(5);
+	printf("%d\n", isPositiveAfterTransform(blinded));
 }
