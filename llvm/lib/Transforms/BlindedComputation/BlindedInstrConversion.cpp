@@ -254,6 +254,7 @@ bool BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &
   return BlindedFunction->hasFnAttribute(Attribute::Blinded);
 }
 
+
 void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(Function &F,
                                                                        AAManager::Result &AA,
                                                                        TaintedRegisters &TR,
@@ -279,19 +280,21 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(Function 
             }
           }
 
-          if (!ParamNos.empty()) {
-            bool IsReturnBlinded = propagateBlindedArgumentFunctionCall(*CB, *CF, ParamNos, AM, VisitedFunctions);
+          bool IsReturnBlinded = ParamNos.empty()
+                                 ? CF->hasFnAttribute(Attribute::Blinded)
+                                 : propagateBlindedArgumentFunctionCall(*CB, *CF, ParamNos, AM, VisitedFunctions);
 
-            if (TRSet->contains(CB) && !IsReturnBlinded) {
-              TR.releaseMemory();
-              KeepGoing = true;
-              break;
-            } else if (!TRSet->contains(CB) && IsReturnBlinded) {
-              TR.explicitlyTaint(CB);
-              KeepGoing = true;
-              break;
-            }
+          if (TRSet->contains(CB) && !IsReturnBlinded) {
+            TR.releaseMemory();
+            KeepGoing = true;
+            break;
+          } else if (!TRSet->contains(CB) && IsReturnBlinded) {
+            TR.explicitlyTaint(CB);
+            KeepGoing = true;
+            break;
           }
+        } else {
+          dbgs() << "Skipping indirect function call.\n";
         }
       }
     }
