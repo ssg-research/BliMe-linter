@@ -1,3 +1,17 @@
+//===- llvm/Analysis/TaintTracking.h --------------------------------------===//
+//
+// Under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+// Author: Eric Liu <e34liu@uwaterloo.ca>
+//         Shazz Amin <me@shazz.me>
+//         Hans Liljestrand <hans@liljestrand.dev>
+//
+// Copyright: Secure System Group, University of waterloo
+//
+//===----------------------------------------------------------------------===//
+
 #ifndef LLVM_ANALYSIS_TAINTTRACKING_H
 #define LLVM_ANALYSIS_TAINTTRACKING_H
 
