@@ -80,6 +80,7 @@
 #include "llvm/Transforms/Utils/NameAnonGlobals.h"
 #include "llvm/Transforms/Utils/SymbolRewriter.h"
 #include "llvm/Transforms/Utils/UniqueInternalLinkageNames.h"
+#include "llvm/Transforms/BlindedComputation/BlindedInstrConversion.h"
 #include <memory>
 using namespace clang;
 using namespace llvm;
@@ -1198,6 +1199,8 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
   if (!CodeGenOpts.DisableLLVMPasses) {
     bool IsThinLTO = CodeGenOpts.PrepareForThinLTO;
     bool IsLTO = CodeGenOpts.PrepareForLTO;
+
+    MPM.addPass(BlindedInstrConversionPass());
 
     if (CodeGenOpts.OptimizationLevel == 0) {
       // If we reached here with a non-empty index file name, then the index

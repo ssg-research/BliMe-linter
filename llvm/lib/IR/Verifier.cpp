@@ -1597,7 +1597,7 @@ static bool isFuncOnlyAttr(Attribute::AttrKind Kind) {
 static bool isFuncOrArgAttr(Attribute::AttrKind Kind) {
   return Kind == Attribute::ReadOnly || Kind == Attribute::WriteOnly ||
          Kind == Attribute::ReadNone || Kind == Attribute::NoFree ||
-         Kind == Attribute::Preallocated;
+         Kind == Attribute::Preallocated || Kind == Attribute::Blinded;
 }
 
 void Verifier::verifyAttributeTypes(AttributeSet Attrs, bool IsFunction,

@@ -23,6 +23,10 @@ public:
   /// been completed, otherwise it processes it first.
   const ConstValueSet &getTaintedRegisters(AAResults *AA);
 
+  /// Explicitly marks value as tainted and propagates taint
+  /// This marking is maintained even after `releaseMemory()` is called
+  void explicitlyTaint(const Value *Value);
+
   /// Free the memory used by this class.
   void releaseMemory();
 
@@ -32,6 +36,10 @@ public:
 private:
   /// The function we are performing taint analysis on.
   Function &F;
+
+  std::unique_ptr<AliasSetTracker> AST;
+
+  ConstValueSet ExplicitlyMarkedTainted;
 
   ConstValueSet TaintedRegisterSet;
 

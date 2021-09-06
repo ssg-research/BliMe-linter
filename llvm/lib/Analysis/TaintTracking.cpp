@@ -21,11 +21,16 @@ TaintedRegisters::buildAliasSetTracker(AAResults *AA) {
   return AST;
 }
 
+void TaintedRegisters::explicitlyTaint(const Value *Value) {
+  ExplicitlyMarkedTainted.insert(Value);
+  propagateTaintedRegisters(Value, AST.get());
+}
+
 const TaintedRegisters::ConstValueSet &
 TaintedRegisters::getTaintedRegisters(AAResults *AA) {
   if (TaintedRegisterSet.empty()) {
-    auto AST = buildAliasSetTracker(AA);
-    AST->dump();
+    AST = buildAliasSetTracker(AA);
+    // AST->dump();
 
     for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
       if (Arg->hasAttribute(Attribute::Blinded)) {
@@ -39,6 +44,10 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
         GlobalVariable &GV = *I;
         if (GV.hasAttribute(Attribute::Blinded)) propagateTaintedRegisters(&GV, AST.get());
       }
+    }
+
+    for (const Value *Val : ExplicitlyMarkedTainted) {
+      propagateTaintedRegisters(Val, AST.get());
     }
   }
   return TaintedRegisterSet;
@@ -113,7 +122,7 @@ static bool isMultiplicationByZero(const BinaryOperator *BinOp) {
 
 void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
                                                  AliasSetTracker *AST) {
-  SmallVector<const Value *, 16> Worklist;
+  SmallVector<const Value *, 64> Worklist;
   Worklist.push_back(TaintedArg);
 
   while (!Worklist.empty()) {
@@ -150,6 +159,13 @@ void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
             if (!GV->hasAttribute(Attribute::Blinded))
               assert(false && "Invalid storage of blinded data in non-blinded memory!");
           }
+        } else if (const CallBase *CB = dyn_cast<CallBase>(UInst)) {
+          if (Function *CF = CB->getCalledFunction()) {
+            if (CF->hasFnAttribute(Attribute::Blinded)) Worklist.push_back(UInst);
+          } else {
+            // assume return value from indirect function call is tainted
+            Worklist.push_back(UInst);
+          }
         } else {
           Worklist.push_back(UInst);
         }
@@ -179,7 +195,7 @@ PreservedAnalyses TaintTrackingPrinterPass::run(Function &F,
   AAResult.addAAResult(SteensAAResult);
   AAResult.addAAResult(BasicAAResult);
   TR.getTaintedRegisters(&AAResult);
-  TR.print(OS);
+  // TR.print(OS);
 
   PreservedAnalyses PA;
   PA.preserve<CFLSteensAA>();

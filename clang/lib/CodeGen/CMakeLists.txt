@@ -2,6 +2,7 @@ set(LLVM_LINK_COMPONENTS
   Analysis
   BitReader
   BitWriter
+  BlindedComputation
   Core
   Coroutines
   Coverage
