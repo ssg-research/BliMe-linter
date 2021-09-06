@@ -45,11 +45,17 @@ new_global=
 grep GLOBAL "$src" >/dev/null && new_global="${old_global}"
 grep LOCAL "$src" >/dev/null && new_local="${old_local}"
 
-sed "s/${old_global}/${new_global}/" "$header_file" | sed "s/${old_local}/${new_local}/"
+grep '^// RUN:' "$src" | 
+  sed 's/^\/\/\s/; /' |
+  sed "s/${old_global}/${new_global}/" | 
+  sed "s/${old_local}/${new_local}/"
 
 # Dump cflags and source
-echo -e "\n; clang $cflags\n"
+echo -e "\n; CFLAGS: $cflags\n"
+
 # Remove C comments, and then make everything .ll comments
-sed 's/^\/\/\s//' "$src" | sed 's/^/; /g'
+grep -v '^// RUN:' "$src" |
+  sed 's/^\/\/\s//' |
+  sed 's/^/; /g'
 
 echo -e "\n\n"

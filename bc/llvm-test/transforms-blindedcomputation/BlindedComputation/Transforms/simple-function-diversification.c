@@ -1,3 +1,5 @@
+// RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
+
 int arr[100];
 
 // We expect to have 6 new variants of this function!

@@ -13,17 +13,18 @@ BUILD_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../../build/bc)
 
 CC = $(BUILD_DIR)/bin/clang
 
-INSTALL_DIR ?= $(LLVM_DIR)/test/Transforms/BlindedComputation
+INSTALL_DIR ?= $(LLVM_DIR)/test/
 CFLAGS ?= --target=riscv64 -Wall -Xclang -disable-lifetime-markers -fno-discard-value-names -fno-unroll-loops -O2
 # CFLAGS += -gdwarf
 
-SOURCE_FILES = $(filter-out common.c,$(wildcard *.c))
+SOURCE_FILES = $(filter-out common.c,$(wildcard *.c) $(wildcard */*.c) $(wildcard */*/*.c))
 TEST_FILES   = $(SOURCE_FILES:.c=.ll)
 LL_FILES     = $(SOURCE_FILES:.c=.c.ll)
 HEADER_FILES = $(SOURCE_FILES:.c=.c.header)
 BODY_FILES = $(SOURCE_FILES:.c=.c.body)
 OBJ_FILES    = $(SOURCE_FILES:.c=.o)
 OUT_FILES    = $(SOURCE_FILES:.c=.out)
+INSTALL_FILES = $(addprefix $(INSTALL_DIR), $(TEST_FILES))
 
 all: $(TEST_FILES)
 
@@ -48,9 +49,10 @@ $(OUT_FILES): %.out : %.c
 $(OBJ_FILES): %.o : %.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
-.PHONY: install
-install: $(TEST_FILES)
-	cp $^ $(INSTALL_DIR)
+install: $(INSTALL_FILES)
+
+$(INSTALL_FILES): $(INSTALL_DIR)% : %
+	cp $< $(INSTALL_DIR)$< 
 
 .PHONY: clean
 clean:

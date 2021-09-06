@@ -1,14 +1,7 @@
 ; RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
 
-; clang --target=riscv64 -Wall -Xclang -disable-lifetime-markers -fno-discard-value-names -fno-unroll-loops -O2
+; CFLAGS: --target=riscv64 -Wall -Xclang -disable-lifetime-markers -fno-discard-value-names -fno-unroll-loops -O2
 
-; /*
-;  * Author: Hans Liljestrand <hans@liljestrand.dev>
-;  * Copyright (C) 2021 Hans Liljestrand <hans@liljestrand.dev>
-;  *
-;  * Distributed under terms of the MIT license.
-;  */
-; 
 ; 
 ; int arr[100];
 ; 
@@ -35,8 +28,8 @@
 
 
 
-; ModuleID = 'simple-function-diversification.c'
-source_filename = "simple-function-diversification.c"
+; ModuleID = 'BlindedComputation/Transforms/simple-function-diversification.c'
+source_filename = "BlindedComputation/Transforms/simple-function-diversification.c"
 target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n64-S128"
 target triple = "riscv64"
 
