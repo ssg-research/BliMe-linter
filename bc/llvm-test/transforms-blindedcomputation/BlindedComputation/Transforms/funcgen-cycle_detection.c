@@ -1,3 +1,9 @@
+// RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
+// XFAIL: *
+// FIXME: Add proper checks here and remove XFAIL.
+
+int useKey(int idx, int idx2, int noTransform);
+
 int arr[100];
 
 int accessArray(int idx) {

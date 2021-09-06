@@ -28,8 +28,8 @@
 
 
 
-; ModuleID = 'BlindedComputation/Transforms/simple-function-diversification.c'
-source_filename = "BlindedComputation/Transforms/simple-function-diversification.c"
+; ModuleID = 'BlindedComputation/Transforms/funcgen-auto_param_blinding.c'
+source_filename = "BlindedComputation/Transforms/funcgen-auto_param_blinding.c"
 target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n64-S128"
 target triple = "riscv64"
 
