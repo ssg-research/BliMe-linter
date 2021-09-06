@@ -3,6 +3,11 @@
 #
 # Distributed under Apache License v2.0 with LLVM Exceptions.
 
+#######################################################################
+# To configure BUILD_DIR, create a Makefile.local and override there! #
+#######################################################################
+-include Makefile.local
+
 LLVM_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../../llvm)
 BUILD_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../../build/bc)
 

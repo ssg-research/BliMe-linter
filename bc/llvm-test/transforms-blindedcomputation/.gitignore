@@ -6,3 +6,4 @@
 !FileCheck-header.ll
 !common.ll
 *.comments
+Makefile.local
