@@ -209,7 +209,7 @@ PreservedAnalyses TaintTrackingPrinterPass::run(Function &F,
   AAResult.addAAResult(SteensAAResult);
   AAResult.addAAResult(BasicAAResult);
   TR.getTaintedRegisters(&AAResult);
-  // TR.print(OS);
+  TR.print(OS);
 
   PreservedAnalyses PA;
   PA.preserve<CFLSteensAA>();
