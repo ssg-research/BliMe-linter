@@ -46,6 +46,7 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
     AST = buildAliasSetTracker(AA);
     // AST->dump();
 
+   // int useKey(__attribute__((blinded)) int idx) {
     for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
       if (Arg->hasAttribute(Attribute::Blinded)) {
         propagateTaintedRegisters(Arg, AST.get());
@@ -141,9 +142,10 @@ void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
 
   while (!Worklist.empty()) {
     const Value *CurrentVal = Worklist.pop_back_val();
-    if (TaintedRegisterSet.contains(CurrentVal)) {
+
+    if (TaintedRegisterSet.contains(CurrentVal))
       continue;
-    }
+
     TaintedRegisterSet.insert(CurrentVal);
 
     for (const User *U : CurrentVal->users()) {
@@ -163,6 +165,8 @@ void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
           const Value *PO = SI->getPointerOperand();
           // if the pointer was allocated on the stack or is a global, then we can handle it
           if (isa<AllocaInst>(PO)) {
+            // FIXME: Does not handle all cases!
+            // For example, the Use might be a GEP based on the source Alloca!
             auto &AS = AST->getAliasSetFor(MemoryLocation::get(SI));
             for (AliasSet::iterator ASI = AS.begin(), E = AS.end(); ASI != E; ++ASI) {
               if (!TaintedRegisterSet.contains(ASI.getPointer())) {
