@@ -14,8 +14,12 @@ BUILD_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../build/bc)
 CC = $(BUILD_DIR)/bin/clang
 
 INSTALL_DIR ?= $(LLVM_DIR)/test/
-CFLAGS ?= --target=riscv64 -Wall -Xclang -disable-lifetime-markers -fno-discard-value-names -fno-unroll-loops -O2
-# CFLAGS += -gdwarf
+CFLAGS ?= --target=x86_64 
+CFLAGS += -Wall -O2
+CFLAGS += -Xclang -disable-lifetime-markers 
+CFLAGS += -fno-discard-value-names 
+CFLAGS += -fno-unroll-loops
+CFLAGS += -gdwarf
 
 SOURCE_FILES = $(filter-out common.c,$(wildcard *.c) $(wildcard */*.c) $(wildcard */*/*.c))
 TEST_FILES   = $(SOURCE_FILES:.c=.ll)
