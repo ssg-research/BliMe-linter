@@ -59,6 +59,7 @@ $(OBJ_FILES): %.o : %.c
 install: $(INSTALL_FILES)
 
 $(INSTALL_FILES): $(INSTALL_DIR)% : %
+	@mkdir -p $(dir $(INSTALL_DIR)$<)
 	cp $< $(INSTALL_DIR)$<
 
 .PHONY: clean
