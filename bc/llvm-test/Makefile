@@ -8,8 +8,8 @@
 #######################################################################
 -include Makefile.local
 
-LLVM_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../../llvm)
-BUILD_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../../build/bc)
+LLVM_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../llvm)
+BUILD_DIR ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../build/bc)
 
 CC = $(BUILD_DIR)/bin/clang
 
