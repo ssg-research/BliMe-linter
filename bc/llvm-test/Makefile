@@ -21,7 +21,10 @@ CFLAGS += -fno-discard-value-names
 CFLAGS += -fno-unroll-loops
 CFLAGS += -gdwarf
 
-SOURCE_FILES = $(filter-out common.c,$(wildcard *.c) $(wildcard */*.c) $(wildcard */*/*.c))
+SOURCE_FILES = $(filter-out common.c,$(wildcard *.c))
+SOURCE_FILES += $(wildcard */*.c)
+SOURCE_FILES += $(wildcard */*/*.c)
+SOURCE_FILES += $(wildcard */*/*/*.c)
 TEST_FILES   = $(SOURCE_FILES:.c=.ll)
 LL_FILES     = $(SOURCE_FILES:.c=.c.ll)
 HEADER_FILES = $(SOURCE_FILES:.c=.c.header)
@@ -56,7 +59,7 @@ $(OBJ_FILES): %.o : %.c
 install: $(INSTALL_FILES)
 
 $(INSTALL_FILES): $(INSTALL_DIR)% : %
-	cp $< $(INSTALL_DIR)$< 
+	cp $< $(INSTALL_DIR)$<
 
 .PHONY: clean
 clean:
