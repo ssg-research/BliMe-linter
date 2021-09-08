@@ -10,8 +10,8 @@ int plain_sink = 0;
 // blinded inputs and outputs. We also expect that the original function
 // remains as is, without any blinded in-/out-puts.
 // 
-// NEWFUNC: define {{.*}} @addOne({{.*}}[[ATTRIBUTE_PLAIN:#[0-9]+]] {
-// NEWFUNC: define {{.*}} @addOne{{\.[a-z0-9]+}}({{.*}}[[ATTRIBUTE_BLINDED:#[0-9]+]] {
+// NEWFUNC: define {{.*}} @addOne({{.*}}[[ATTRIBUTE_PLAIN:#[0-9]+]] {{( *![a-z0-9]+)*}} {
+// NEWFUNC: define {{.*}} @addOne{{\.[a-z0-9]+}}({{.*}}[[ATTRIBUTE_BLINDED:#[0-9]+]] {{( *![a-z0-9]+)*}} {
 // NEWFUNC-NOT: attributes [[ATTRIBUTE_PLAIN]]{{.*}}blinded
 // NEWFUNC: attributes [[ATTRIBUTE_BLINDED]]{{.*}}blinded
 //
@@ -24,7 +24,7 @@ int addOne(int i) {
 // should be converted to a blinded function and hence cause this to return a
 // blinded value also.
 // 
-// RETURNS: @do_stuff{{.*}}[[ATTRIBUTE_BLINDED:#[0-9]+]] {
+// RETURNS: @do_stuff{{.*}}[[ATTRIBUTE_BLINDED:#[0-9]+]] {{( *![a-z0-9]+)*}} {
 // RETURNS: attributes [[ATTRIBUTE_BLINDED]]{{.*}}blinded
 __attribute__((noinline))
 int do_stuff(__attribute__((blinded)) int blinded, int plain) {
