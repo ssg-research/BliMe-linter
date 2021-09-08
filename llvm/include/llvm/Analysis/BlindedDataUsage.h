@@ -42,6 +42,15 @@ public:
   Result run(Function &F, FunctionAnalysisManager &AM);
 };
 
+class BlindedDataUsagePrinterPass
+    : public PassInfoMixin<BlindedDataUsagePrinterPass> {
+  raw_ostream &OS;
+
+public:
+  explicit BlindedDataUsagePrinterPass(raw_ostream &OS) : OS(OS) {}
+  PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+};
+
 } // namespace llvm
 
 #endif // LLVM_ANALYSIS_BLINDEDDATAUSAGE_H

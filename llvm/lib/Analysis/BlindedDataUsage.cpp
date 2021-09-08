@@ -48,3 +48,19 @@ BlindedDataUsage BlindedDataUsageAnalysis::run(Function &F,
                                      FunctionAnalysisManager &AM) {
   return BlindedDataUsage(F);
 }
+
+PreservedAnalyses BlindedDataUsagePrinterPass::run(Function &F, FunctionAnalysisManager &AM) {
+  auto &TaintedRegs = AM.getResult<BlindedDataUsageAnalysis>(F);
+
+  // TODO: Print out the results
+  //
+  // Note, for this to work, the BlindedDataUsageAnalysis must first be updated
+  // such that it doesn't immediately crash on failures, but instead returns
+  // a list/set/data-structure with the violating instructions.
+  OS << __FUNCTION__ << " isn't done yet!\n";
+  llvm_unreachable("unimplemented");
+
+  PreservedAnalyses PA;
+  PA.preserve<BlindedDataUsageAnalysis>();
+  return PA;
+}
