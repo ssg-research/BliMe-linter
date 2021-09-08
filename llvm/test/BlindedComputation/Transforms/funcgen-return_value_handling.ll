@@ -1,9 +1,12 @@
 ; RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s -check-prefix=NEWFUNC
 ; RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s -check-prefix=RETURNS
+; 
+; THIS IS A GENERATED TEST, DO NOT MODIFY HERE!!!
+; Instead, modify it under /bc/llvm-test and install from there!
+; 
 
 ; CFLAGS: --target=x86_64  -Wall -O2 -Xclang -disable-lifetime-markers  -fno-discard-value-names  -fno-unroll-loops -gdwarf
 
-; 
 ; 
 ; int arr[100];
 ; 
@@ -107,16 +110,16 @@ attributes #3 = { nounwind readnone speculatable willreturn }
 !llvm.ident = !{!17}
 
 !0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
-!1 = distinct !DIGlobalVariable(name: "blind_sink", scope: !2, file: !3, line: 7, type: !8, isLocal: false, isDefinition: true)
+!1 = distinct !DIGlobalVariable(name: "blind_sink", scope: !2, file: !3, line: 6, type: !8, isLocal: false, isDefinition: true)
 !2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 11.0.0 (git@gitlab.com:ssg-research/platsec/attack-tolerant-execution/bc-llvm.git 1c77bda76783d7415c21705b687c7297c8a273af)", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5, splitDebugInlining: false, nameTableKind: None)
 !3 = !DIFile(filename: "BlindedComputation/Transforms/funcgen-return_value_handling.c", directory: "/home/ishkamiel/d/llvm/bc/llvm-test")
 !4 = !{}
 !5 = !{!0, !6, !9}
 !6 = !DIGlobalVariableExpression(var: !7, expr: !DIExpression())
-!7 = distinct !DIGlobalVariable(name: "plain_sink", scope: !2, file: !3, line: 8, type: !8, isLocal: false, isDefinition: true)
+!7 = distinct !DIGlobalVariable(name: "plain_sink", scope: !2, file: !3, line: 7, type: !8, isLocal: false, isDefinition: true)
 !8 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
 !9 = !DIGlobalVariableExpression(var: !10, expr: !DIExpression())
-!10 = distinct !DIGlobalVariable(name: "arr", scope: !2, file: !3, line: 5, type: !11, isLocal: false, isDefinition: true)
+!10 = distinct !DIGlobalVariable(name: "arr", scope: !2, file: !3, line: 4, type: !11, isLocal: false, isDefinition: true)
 !11 = !DICompositeType(tag: DW_TAG_array_type, baseType: !8, size: 3200, elements: !12)
 !12 = !{!13}
 !13 = !DISubrange(count: 100)
@@ -124,26 +127,26 @@ attributes #3 = { nounwind readnone speculatable willreturn }
 !15 = !{i32 2, !"Debug Info Version", i32 3}
 !16 = !{i32 1, !"wchar_size", i32 4}
 !17 = !{!"clang version 11.0.0"}
-!18 = distinct !DISubprogram(name: "addOne", scope: !3, file: !3, line: 20, type: !19, scopeLine: 20, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !21)
+!18 = distinct !DISubprogram(name: "addOne", scope: !3, file: !3, line: 19, type: !19, scopeLine: 19, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !21)
 !19 = !DISubroutineType(types: !20)
 !20 = !{!8, !8}
 !21 = !{!22}
-!22 = !DILocalVariable(name: "i", arg: 1, scope: !18, file: !3, line: 20, type: !8)
+!22 = !DILocalVariable(name: "i", arg: 1, scope: !18, file: !3, line: 19, type: !8)
 !23 = !DILocation(line: 0, scope: !18)
-!24 = !DILocation(line: 21, column: 11, scope: !18)
-!25 = !DILocation(line: 21, column: 2, scope: !18)
-!26 = distinct !DISubprogram(name: "do_stuff", scope: !3, file: !3, line: 31, type: !27, scopeLine: 31, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !29)
+!24 = !DILocation(line: 20, column: 11, scope: !18)
+!25 = !DILocation(line: 20, column: 2, scope: !18)
+!26 = distinct !DISubprogram(name: "do_stuff", scope: !3, file: !3, line: 30, type: !27, scopeLine: 30, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !29)
 !27 = !DISubroutineType(types: !28)
 !28 = !{!8, !8, !8}
 !29 = !{!30, !31}
-!30 = !DILocalVariable(name: "blinded", arg: 1, scope: !26, file: !3, line: 31, type: !8)
-!31 = !DILocalVariable(name: "plain", arg: 2, scope: !26, file: !3, line: 31, type: !8)
+!30 = !DILocalVariable(name: "blinded", arg: 1, scope: !26, file: !3, line: 30, type: !8)
+!31 = !DILocalVariable(name: "plain", arg: 2, scope: !26, file: !3, line: 30, type: !8)
 !32 = !DILocation(line: 0, scope: !26)
-!33 = !DILocation(line: 34, column: 10, scope: !26)
-!34 = !DILocation(line: 34, column: 28, scope: !26)
-!35 = !DILocation(line: 34, column: 26, scope: !26)
-!36 = !DILocation(line: 34, column: 3, scope: !26)
-!37 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 37, type: !38, scopeLine: 37, flags: DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !4)
+!33 = !DILocation(line: 33, column: 10, scope: !26)
+!34 = !DILocation(line: 33, column: 28, scope: !26)
+!35 = !DILocation(line: 33, column: 26, scope: !26)
+!36 = !DILocation(line: 33, column: 3, scope: !26)
+!37 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 36, type: !38, scopeLine: 36, flags: DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !4)
 !38 = !DISubroutineType(types: !39)
 !39 = !{!8}
-!40 = !DILocation(line: 39, column: 3, scope: !37)
+!40 = !DILocation(line: 38, column: 3, scope: !37)

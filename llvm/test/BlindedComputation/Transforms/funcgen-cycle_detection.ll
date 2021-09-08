@@ -1,4 +1,8 @@
 ; RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
+; 
+; THIS IS A GENERATED TEST, DO NOT MODIFY HERE!!!
+; Instead, modify it under /bc/llvm-test and install from there!
+; 
 
 ; CFLAGS: --target=x86_64  -Wall -O2 -Xclang -disable-lifetime-markers  -fno-discard-value-names  -fno-unroll-loops -gdwarf
 
