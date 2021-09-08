@@ -50,6 +50,11 @@ grep '^// RUN:' "$src" |
   sed "s/${old_global}/${new_global}/" | 
   sed "s/${old_local}/${new_local}/"
 
+echo "; "
+echo "; THIS IS A GENERATED TEST, DO NOT MODIFY HERE!!!"
+echo "; Instead, modify it under /bc/llvm-test and install from there!"
+echo "; "
+
 # Dump cflags and source
 echo -e "\n; CFLAGS: $cflags\n"
 
