@@ -29,12 +29,14 @@ void BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
     }
 
     if (isa<BranchInst>(&Inst)) {
+      // FIXME: Don't use assert here!
       assert(false && "Invalid use of blinded data as operand of BranchInst!");
     }
 
     if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&Inst)) {
       for (auto Idx = GEP->idx_begin(); Idx != GEP->idx_end(); ++Idx) {
         if (TRSet.contains(*Idx)) {
+          // FIXME: Don't use assert here!
           assert(GEP->getSourceElementType()->isArrayTy() &&
                  "Invalid use of blinded data as index of varying-size array!");
         }

@@ -19,6 +19,7 @@
 
 namespace llvm {
 
+// FIXME: Needs to report multiple policy violations!
 class BlindedDataUsage {
 public:
   BlindedDataUsage(Function &F) : F(F) {}
