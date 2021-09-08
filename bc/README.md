@@ -31,7 +31,7 @@ test other stuff (e.g., in my case I would create
 ## Building LLVM
 
 I recommend using a `build/bc` subdirectory for builds related to this project.
-This is also assumed by some helper script in the </bc> folder of the project.
+This is also assumed by some helper script in the [/bc] folder of the project.
 
 The main branch we are using is `bc/main`.
 
@@ -53,7 +53,7 @@ cmake -G Ninja \
   ..
 ```
 
-Consult [LLVM-CMake] for details. In particular, adjust
+Consult [LLVM docs on CMake] for details. In particular, adjust
 `LLVM_PARALLEL_{LINK,COMPILE}_JOBS` to suit your build environment (link jobs
 can be very memory intensive, and should be limited to avoid out-of-memory
 exceptions). Installing (`ninja install`) is typically not needed, but if
@@ -66,8 +66,8 @@ transformations, and a verification pass.
 
 ### TaintTrackingAnalysis
 
-- </llvm/include/llvm/Analysis/TaintTracking.h>
-- </llvm/lib/Analysis/TaintTracking.cpp>
+- [/llvm/include/llvm/Analysis/TaintTracking.h]
+- [/llvm/lib/Analysis/TaintTracking.cpp]
 
 This is an inter-procedural analysis that produces the set of `Value`s that are
 tainted by taint sinks (e.g., tainted global values or tainted function
@@ -75,8 +75,8 @@ arguments).
 
 ### BlindedInstrConversionPass
 
-- </llvm/include/llvm/Analysis/Blinded.h>
-- </llvm/lib/Transforms/BlindedComputation/BlindedInstrConversion.cpp>
+- [/llvm/include/llvm/Transforms/BlindedComputation/BlindedInstrConversion.h]
+- [/llvm/lib/Transforms/BlindedComputation/BlindedInstrConversion.cpp]
 
 This pass tries to transform code structures that violate the blinding policy
 such that they conform to the policy.  It uses the TaintTrackingAnalysis pass to
@@ -90,8 +90,8 @@ transformations:
 
 ### BlindedDataUsageAnalysis
 
-- </llvm/include/llvm/Analysis/BlindedDataUsage.h>
-- </llvm/lib/Analysis/BlindedDataUsage.cpp>
+- [/llvm/include/llvm/Analysis/BlindedDataUsage.h]
+- [/llvm/lib/Analysis/BlindedDataUsage.cpp]
 
 This is a simple analysis pass that uses the TaintTrackingAnalysis pass to find
 taints and then validates all instructions to ensure they do not violate the
@@ -111,13 +111,15 @@ project.
 
 ### Writing tests
 
-Test for **llvm-lit** can be written in many ways, including: 
+Test for **llvm-lit** can be written in many ways, including:
 
-1) Writing plain IR by hand. 
+1) Writing plain IR by hand. (Use the [LLVM IR reference] to help out!)
 2) Generating IR from C/C++ using **clang**.
-3) Extracting test from existing programs using **clang**, **llvm-extract**, or **llvm-reduce**.
+3) Extracting test from existing programs using **clang**, **llvm-extract**, or
+   **llvm-reduce**.
 
-Tests can be run using the **llvm-lit** tool or via the build system. For instance, to run all tests under </llvm/test/BlindedComputation>, one can run:
+Tests can be run using the **llvm-lit** tool or via the build system. For
+instance, to run all tests under [/llvm/test/BlindedComputation], one can run:
 
 ```sh
 ninja check-llvm-blindedcomputation
@@ -126,9 +128,10 @@ ninja check-llvm-blindedcomputation
 The tests themselves are typically composed of IR source files with `RUN` and
 different `CHECK` directives. The `RUN` directive tells the runner how to
 execute the source file, whereas the `CHECK` directives tell the **FileCheck**
-utility what to expect in the output.
+utility what to expect in the output ([LLVM docs on FileCheck]).
 
-For instance <llvm/test/BlindedComputation/Analysis/tainttracking-printer.ll> starts with the following `RUN` directive:
+For instance [/llvm/test/BlindedComputation/Analysis/tainttracking-printer.ll]
+starts with the following `RUN` directive:
 
 ```llvm
 ; RUN: opt -passes="print<taint-tracking>" -S -disable-output < %s 2>&1 | FileCheck %s
@@ -182,21 +185,35 @@ tool and simply extracts a given function, which might or might not be
 sufficient to replicate a bug. Reduce is a more advanced tool that allows a test
 case to be gradually reduced to a smaller test case that still triggers the bug
 under consideration (there is a good LLVM Dev Meeting video on it
-[LLVMDev-reduce])
+[LLVM Dev Meeting talk on llvm-reduce])
 
 #### Possible "helper" scripts
 
-The </bc/llvm-test> folder contains some helpers scripts to generate tests from
+The [/bc/llvm-test] folder contains some helpers scripts to generate tests from
 C/C++ source files. These can be compiled with **make**, and automatically
-installed under </llvm/test> by running `make install`. The basic idea here is
+installed under [/llvm/test] by running `make install`. The basic idea here is
 to write the test in a C/C++ source file which is then automatically converted
 to the corresponding IR test case. If this is used, I recommend starting with
 only building and inspecting the files (i.e., not using install automatically).
 
 ---
 
-[LLVM-FileCheck]: https://llvm.org/docs/CommandGuide/FileCheck.html
-[LLVM-IR]: https://llvm.org/docs/LangRef.html
-[LLVM-CMake]: https://llvm.org/docs/CMake.html
-[LLVMDev-reduce]: https://www.youtube.com/watch?v=n1jDj7J9N8c
+[LLVM docs on FileCheck]: https://llvm.org/docs/CommandGuide/FileCheck.html
+[LLVM IR reference]: https://llvm.org/docs/LangRef.html
+[LLVM docs on CMake]: https://llvm.org/docs/CMake.html
+[LLVM Dev Meeting talk on llvm-reduce]: https://www.youtube.com/watch?v=n1jDj7J9N8c
 [LLVM Coding Standards]: https://llvm.org/docs/CodingStandards.html
+
+[/bc]:           https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/bc
+[/bc/llvm-test]: https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/bc/llvm-test
+
+[/llvm/test]:https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/llvm/test
+[/llvm/test/BlindedComputation]: https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/llvm/test/BlindedComputation
+[/llvm/test/BlindedComputation/Analysis/TaintTracking/tainttracking-printer.ll]: https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/llvm/test/BlindedComputation/Analysis/tainttracking-printer.ll
+
+[/llvm/include/llvm/Analysis/BlindedDataUsage.h]: https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/llvm/include/llvm/Analysis/BlindedDataUsage.h
+[/llvm/include/llvm/Analysis/TaintTracking.h]:    https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/llvm/include/llvm/Analysis/TaintTracking.h
+[/llvm/lib/Analysis/BlindedDataUsage.cpp]:        https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/llvm/lib/Analysis/BlindedDataUsage.cpp
+[/llvm/lib/Analysis/TaintTracking.cpp]:           https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/llvm/lib/Analysis/TaintTracking.cpp
+[/llvm/include/llvm/Transforms/BlindedComputation/BlindedInstrConversion.h]: https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/llvm/include/llvm/Transforms/BlindedComputation/BlindedInstrConversion.h
+[/llvm/lib/Transforms/BlindedComputation/BlindedInstrConversion.cpp]: https://gitlab.com/ssg-research/platsec/attack-tolerant-execution/bc-llvm/-/tree/bc/main/llvm/lib/Transforms/BlindedComputation/BlindedInstrConversion.cpp
