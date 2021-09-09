@@ -303,16 +303,29 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(Function 
   }
 }
 
-static void markBlindedIfNecessary(Function &F, AAManager::Result &AA, TaintedRegisters &TR) {
+static bool changeBlindedFunctionAttr(Function &F, const bool newVal) {
+  const bool wasSet = F.hasFnAttribute(Attribute::Blinded);
+
+  if (wasSet != newVal) {
+    if (newVal) {
+      F.addFnAttr(Attribute::Blinded);
+    } else {
+      F.removeFnAttr(Attribute::Blinded);
+    }
+  }
+
+  return wasSet != newVal;
+}
+
+static bool markBlindedIfNecessary(Function &F, AAManager::Result &AA, TaintedRegisters &TR) {
   auto &TRSet = TR.getTaintedRegisters(&AA);
   for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
     Instruction &Inst = *I;
     if (isa<ReturnInst>(&Inst) && TRSet.contains(&Inst)) {
-      F.addFnAttr(Attribute::Blinded);
-      return;
+      return changeBlindedFunctionAttr(F, true);
     }
   }
-  F.removeFnAttr(Attribute::Blinded);
+  return changeBlindedFunctionAttr(F, false);
 }
 
 /// This is the entry point for all transforms.
@@ -329,10 +342,7 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
   MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
   propagateBlindedArgumentFunctionCalls(F, AA, TR, AM, VisitedFunctions);
   MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
-  markBlindedIfNecessary(F, AA, TR);
-
-  // TODO: we probably don't want to dump all instructions every time
-  // F.dump();
+  MadeChange |= markBlindedIfNecessary(F, AA, TR);
 
   // Verify our blinded data usage policies
   BDU.validateBlindedData(TR, AA);
