@@ -197,6 +197,10 @@ static bool expandBlindedArrayAccesses(Function &F,
   return MadeChange;
 }
 
+/// Ensure CallBase calls a function with the ParamNos args blinded
+///
+/// This will potentially also generate a new copy of the called function F,
+/// unless the function already conforms to the required blindedness properties.
 bool BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &CB,
                                                                       Function &F,
                                                                       ArrayRef<unsigned> ParamNos,
@@ -254,35 +258,38 @@ bool BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &
   return BlindedFunction->hasFnAttribute(Attribute::Blinded);
 }
 
-
-void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(Function &F,
-                                                                       AAManager::Result &AA,
-                                                                       TaintedRegisters &TR,
-                                                                       FunctionAnalysisManager &AM,
-                                                                       SmallSet<Function *, 8> &VisitedFunctions) {
+/// Check calls in F to make sure they call blinded permutations of the callee
+///
+/// When necessary, this will also automatically create the necessary new
+/// function permutations.
+void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
+    Function &F, AAManager::Result &AA, TaintedRegisters &TR,
+    FunctionAnalysisManager &AM, SmallSet<Function *, 8> &VisitedFunctions) {
   while (true) {
     bool KeepGoing = false;
-    auto *TRSet = &TR.getTaintedRegisters(&AA);
+    const auto *TRSet = &TR.getTaintedRegisters(&AA);
 
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       Instruction &Inst = *I;
 
+      // Check all calls in the function
       if (CallBase *CB = dyn_cast<CallBase>(&Inst)) {
         if (Function *CF = CB->getCalledFunction()) {
           // look for blinded arguments going to non-blinded paramaters
-          SmallVector<unsigned, 8> ParamNos;
-          for (auto Arg = CB->arg_begin(); Arg != CB->arg_end(); ++Arg) {
-            if (TRSet->contains(Arg->get())) {
-              unsigned ParamNo = CB->getArgOperandNo(Arg);
-              if (!CF->hasParamAttribute(ParamNo, Attribute::Blinded)) {
-                ParamNos.push_back(ParamNo);
-              }
+          SmallVector<unsigned, 8> BlindedParams;
+
+          for (auto &Arg : CB->args()) {
+            unsigned n = Arg.getOperandNo();
+            if (TRSet->contains(Arg) &&
+                !CF->hasParamAttribute(n, Attribute::Blinded)) {
+              BlindedParams.push_back(n);
             }
           }
 
-          bool IsReturnBlinded = ParamNos.empty()
-                                 ? CF->hasFnAttribute(Attribute::Blinded)
-                                 : propagateBlindedArgumentFunctionCall(*CB, *CF, ParamNos, AM, VisitedFunctions);
+          bool IsReturnBlinded = (BlindedParams.empty()
+                   ? CF->hasFnAttribute(Attribute::Blinded)
+                   : propagateBlindedArgumentFunctionCall(
+                         *CB, *CF, BlindedParams, AM, VisitedFunctions));
 
           if (TRSet->contains(CB) && !IsReturnBlinded) {
             TR.releaseMemory();
@@ -296,8 +303,8 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(Function 
         } else {
           dbgs() << "Skipping indirect function call.\n";
         }
-      }
-    }
+      } // if (Callbase...
+    } // for (inst_iterator...
 
     if (!KeepGoing) break;
   }
