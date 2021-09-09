@@ -205,7 +205,7 @@ attributes #3 = { nounwind readnone speculatable willreturn }
 
 !0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
 !1 = distinct !DIGlobalVariable(name: "g_blinded", scope: !2, file: !3, line: 18, type: !9, isLocal: false, isDefinition: true)
-!2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 11.0.0 (git@gitlab.com:ssg-research/platsec/attack-tolerant-execution/bc-llvm.git 442f4102830a03b7448b29bb2f2844c770f35263)", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5, splitDebugInlining: false, nameTableKind: None)
+!2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 11.0", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5, splitDebugInlining: false, nameTableKind: None)
 !3 = !DIFile(filename: "BlindedComputation/Transforms/markreturns-analysisupdate.c", directory: "/home/ishkamiel/d/llvm/bc/llvm-test")
 !4 = !{}
 !5 = !{!0, !6}

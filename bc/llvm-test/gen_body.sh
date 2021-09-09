@@ -53,7 +53,8 @@ else
   
       echo "$line" | 
         sed -E '/^declare dso_local (\w|_|-)+ @doNothing/d' |
-	      sed -E 's/(clang version [[:digit:]]+(\.[[:digit:]])*) .*"}/\1"}/'
+	      sed -E 's/(clang version [[:digit:]]+(\.[[:digit:]])*) .*"}/\1"}/' |
+        sed -E 's/(DICompileUnit\(.*producer: "clang version [[:digit:]]+\.[[:digit:]]+).*"/\1"/'
     fi
 
     linenr=$((linenr+1))

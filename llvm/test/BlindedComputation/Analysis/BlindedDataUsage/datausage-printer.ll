@@ -99,7 +99,7 @@ attributes #4 = { nounwind }
 !llvm.module.flags = !{!3, !4, !5}
 !llvm.ident = !{!6}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang version 11.0.0 (git@gitlab.com:ssg-research/platsec/attack-tolerant-execution/bc-llvm.git 1c77bda76783d7415c21705b687c7297c8a273af)", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, splitDebugInlining: false, nameTableKind: None)
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang version 11.0", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, splitDebugInlining: false, nameTableKind: None)
 !1 = !DIFile(filename: "BlindedComputation/Analysis/BlindedDataUsage/datausage-printer.c", directory: "/home/ishkamiel/d/llvm/bc/llvm-test")
 !2 = !{}
 !3 = !{i32 7, !"Dwarf Version", i32 4}
