@@ -31,10 +31,34 @@ while [ $# -gt 0 ]; do
     ;;
   esac
 done
-[[ -n $src ]] || fail "No src!"
 
-head -n 5 "$src"
-cat "${common_file}"
-tail -n +5 "$src" |
-	sed -E '/^declare dso_local (\w|_|-)+ @doNothing/d' |
-	sed -E 's/(clang version [[:digit:]]+(\.[[:digit:]])*) .*"}/\1"}/'
+
+if [[ -n $src ]]; then
+  head -n 5 "$src"
+  cat "${common_file}"
+  tail -n +5 "$src" |
+	  sed -E '/^declare dso_local (\w|_|-)+ @doNothing/d' |
+	  sed -E 's/(clang version [[:digit:]]+(\.[[:digit:]])*) .*"}/\1"}/'
+else
+  # Assume we're processing stdin
+  while IFS= read -r line
+  do
+    if [[ $linenr -lt 5 ]]; then
+      echo "$line"
+    else
+      if [[ linenr -eq 5 ]]; then 
+        cat "${common_file}"
+        echo
+      fi
+  
+      echo "$line" | 
+        sed -E '/^declare dso_local (\w|_|-)+ @doNothing/d' |
+	      sed -E 's/(clang version [[:digit:]]+(\.[[:digit:]])*) .*"}/\1"}/'
+    fi
+
+    linenr=$((linenr+1))
+  done
+fi
+
+linenr=0
+
