@@ -8,8 +8,9 @@
 ; CHECK-NOT:     getelementptr inbounds [100 x i32], [100 x i32]* @arr, i64 0, i64 {{%.*}}
 ; CHECK:         getelementptr inbounds ([100 x i32], [100 x i32]* @arr, i64 0, i64 0), align 4
 ; CHECK-NEXT:    br label {{%.*}}
-; CHECK:         [[RET:%.*]] = select i1 {{%.*}}, i32 {{%.*}}, i32 {{%.*}}
-; CHECK:         ret i32 [[RET]]
+; Disable the follwoing since they're incompatible with the select transforms
+; DIABLE-CHECK:         [[RET:%.*]] = select i1 {{%.*}}, i32 {{%.*}}, i32 {{%.*}}
+; DIABLE-CHECK:         ret i32 [[RET]]
 
 ; Function Attrs: noinline nounwind optnone uwtable
 define dso_local i32 @accessArray(i32 %scale, i32 %offset) #1 {

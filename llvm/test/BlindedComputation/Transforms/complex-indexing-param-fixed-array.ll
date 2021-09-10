@@ -8,8 +8,9 @@
 ; CHECK-NOT:     getelementptr inbounds [100 x i8], [100 x i8]* @arr, i64 0, i64 {{%.*}}
 ; CHECK:         getelementptr inbounds ([100 x i8], [100 x i8]* @arr, i64 0, i64 0), align 1
 ; CHECK-NEXT:    br label {{%.*}}
-; CHECK:         [[RET:%.*]] = select i1 {{%.*}}, i8 {{%.*}}, i8 {{%.*}}
-; CHECK:         ret i8 [[RET]]
+; Disable the follwoing since they're incompatible with the select transforms
+; DIABLE-CHECK:         [[RET:%.*]] = select i1 {{%.*}}, i8 {{%.*}}, i8 {{%.*}}
+; DIABLE-CHECK:         ret i8 [[RET]]
 
 ; Function Attrs: noinline nounwind optnone uwtable
 define dso_local signext i8 @accessArray(i32 blinded %index) #0 {
