@@ -1,5 +1,4 @@
 // RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
-// XFAIL: *
 #include <stdint.h>
 
 // CHECK-LABEL: @simpleTest

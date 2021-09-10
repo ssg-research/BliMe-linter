@@ -335,6 +335,63 @@ static bool markBlindedIfNecessary(Function &F, AAManager::Result &AA, TaintedRe
   return changeBlindedFunctionAttr(F, false);
 }
 
+/// Convert SelectInst to a linearized variant
+//
+//
+bool BlindedInstrConversionPass::linearizeSelectInstructions(Function &F) {
+  SmallVector<Instruction*,8> RemoveList;
+
+  for (Instruction &I : inst_range(inst_begin(F), inst_end(F))) {
+    if (auto *S = dyn_cast<SelectInst>(&I)) {
+      auto *const CondVal = S->getCondition();
+
+      assert(CondVal->getType()->isIntegerTy() && "expected cond to be int");
+      assert(1 == cast<IntegerType>(CondVal->getType())->getScalarSizeInBits()
+          && "expected 1-bit cond value!");
+
+      auto *const ResultType = S->getType();
+      const bool ResultTypeIsPointer = ResultType->isPointerTy();
+      auto ResultTypeSize =
+          ResultTypeIsPointer
+              ? F.getParent()->getDataLayout().getPointerSizeInBits()
+              : ResultType->getPrimitiveSizeInBits();
+
+      assert(ResultTypeSize > 0 && "Got non-positive size for the result");
+
+      auto *MaskType = IntegerType::getIntNTy(F.getContext(), ResultTypeSize);
+
+      // Insert new stuff before the select (which we will remove later)
+      IRBuilder<> Builder(S);
+
+      // Need to special case PointerType Values
+      auto *TrueValue = ResultTypeIsPointer
+              ? Builder.CreatePtrToInt(S->getTrueValue(), MaskType)
+              : S->getTrueValue();
+      auto *FalseValue = ResultTypeIsPointer
+              ? Builder.CreatePtrToInt(S->getFalseValue(), MaskType)
+              : S->getFalseValue();
+
+      assert(TrueValue->getType() == FalseValue->getType() && "Type mismatch");
+
+      // Based on <https://github.com/veorq/cryptocoding#solution-1>
+      auto *NegCondVal = Builder.CreateNeg(CondVal);
+      auto *MaskVal = Builder.CreateSExtOrBitCast(NegCondVal,MaskType);
+      auto *TmpXor = Builder.CreateXor(TrueValue, FalseValue);
+      auto *TmpXorMasked = Builder.CreateAnd(MaskVal, TmpXor);
+      auto *TmpResVal = Builder.CreateXor(TmpXorMasked, FalseValue);
+      auto *Result = Builder.CreateIntToPtr(TmpResVal, ResultType);
+
+      S->replaceAllUsesWith(Result);
+      RemoveList.push_back(S);
+    }
+  }
+
+  for (auto I : RemoveList)
+    I->eraseFromParent();
+
+  return !RemoveList.empty();
+}
+
 /// This is the entry point for all transforms.
 bool BlindedInstrConversionPass::runImpl(Function &F,
                     AAManager::Result &AA,
@@ -350,6 +407,7 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
   propagateBlindedArgumentFunctionCalls(F, AA, TR, AM, VisitedFunctions);
   MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
   MadeChange |= markBlindedIfNecessary(F, AA, TR);
+  MadeChange |= linearizeSelectInstructions(F);
 
   // Verify our blinded data usage policies
   BDU.validateBlindedData(TR, AA);
