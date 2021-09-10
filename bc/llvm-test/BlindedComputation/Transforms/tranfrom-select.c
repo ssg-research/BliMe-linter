@@ -15,11 +15,48 @@ int varReturns(__attribute__((blinded)) int a, int b, int c) {
   return a > 11 ? b : c;
 }
 
-// CHECK-LABEL: @moarTricky
-// CHECK-NOT: select
-// CHECK: ret i8*
 char *moarTricky(__attribute__((blinded)) int a, char *b, char *c) {
   return a > 11 ? b : c;
+}
+
+// Lets just ignore this...
+int get_number(int *);
+
+// CHECK-LABEL: @arrayMess
+// CHECK-NOT: select
+// CHECK: ret i32
+int arrayMess(__attribute__((blinded)) int cond) {
+  int a[10] = {1,2,3,4,5,6,7,8,9,0};
+  int b[10] = {0,9,8,7,6,5,4,3,2,1};
+
+  int *param = cond > 10 ? a : b;
+
+  return get_number(param);
+}
+
+// CHECK-LABEL: @arrayMess2
+// CHECK-NOT: select
+// CHECK: ret i32
+int arrayMess2(__attribute__((blinded)) int cond, int mod, int idx) {
+  int a[10] = {1,2,3,4,5,6,7,8,9,0};
+  int b[10] = {0,9,8,7,6,5,4,3,2,1};
+
+  for (int i = 0; i < 10; ++i) {
+    a[i] += mod;
+    b[i] -= mod;
+  }
+
+  return (cond > 10 ? a : b)[idx];
+}
+
+struct failWhale { long d1; long d2; long d3; };
+
+// CHECK-LABEL: @structMesser
+// CHECK-NOT: select
+// CHECK: ret
+struct failWhale structMesser(__attribute__((blinded)) int cond,
+                              struct failWhale a, struct failWhale b) {
+  return cond > 10 ? a : b;
 }
 
 void test1(uintptr_t);
