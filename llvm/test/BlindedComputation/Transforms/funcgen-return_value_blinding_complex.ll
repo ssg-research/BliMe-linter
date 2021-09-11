@@ -7,7 +7,12 @@
 ; CFLAGS: --target=x86_64  -Wall -O2 -Xclang -disable-lifetime-markers  -fno-discard-value-names  -fno-unroll-loops -gdwarf
 
 ; XFAIL: *
-; FIXME: Add proper checks here and remove XFAIL.
+; //
+; FIXME: Enable and update once BlindedDataUsage does proper reporting
+; //
+; Make sure we correctly handle cases where a loop is such that it is
+; fine on first execution, but will violate the taint-spolicy on
+; subsequent iterations.
 ; 
 ; int arr[100];
 ; 
@@ -19,14 +24,17 @@
 ; 	return scale * idx + offset;
 ; }
 ; 
+; CHECK: Invalid use of blinded data  as operand of BranchInst
 ; int useKey(__attribute__((blinded)) int idx) {
 ; 	int sum = 0;
 ; 	int i = 0;
 ; 	while (1) {
+;     // i is non-blinded on first iteration
 ; 		sum += accessArray(i);
-; 
 ; 		if (i != 0) break;
 ; 
+;     // But this will taint i for subsequent iterations and
+;     // cause the previous if statement to violate the policy!
 ; 		i = transform(idx, 1, 0);
 ; 	}
 ; 
@@ -146,7 +154,7 @@ attributes #2 = { nounwind readnone speculatable willreturn }
 !llvm.ident = !{!13}
 
 !0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
-!1 = distinct !DIGlobalVariable(name: "arr", scope: !2, file: !3, line: 5, type: !6, isLocal: false, isDefinition: true)
+!1 = distinct !DIGlobalVariable(name: "arr", scope: !2, file: !3, line: 10, type: !6, isLocal: false, isDefinition: true)
 !2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 11.0", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5, splitDebugInlining: false, nameTableKind: None)
 !3 = !DIFile(filename: "BlindedComputation/Transforms/funcgen-return_value_blinding_complex.c", directory: "/home/ishkamiel/d/llvm/bc/llvm-test")
 !4 = !{}
@@ -159,59 +167,59 @@ attributes #2 = { nounwind readnone speculatable willreturn }
 !11 = !{i32 2, !"Debug Info Version", i32 3}
 !12 = !{i32 1, !"wchar_size", i32 4}
 !13 = !{!"clang version 11.0.0"}
-!14 = distinct !DISubprogram(name: "accessArray", scope: !3, file: !3, line: 7, type: !15, scopeLine: 7, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !17)
+!14 = distinct !DISubprogram(name: "accessArray", scope: !3, file: !3, line: 12, type: !15, scopeLine: 12, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !17)
 !15 = !DISubroutineType(types: !16)
 !16 = !{!7, !7}
 !17 = !{!18}
-!18 = !DILocalVariable(name: "idx", arg: 1, scope: !14, file: !3, line: 7, type: !7)
+!18 = !DILocalVariable(name: "idx", arg: 1, scope: !14, file: !3, line: 12, type: !7)
 !19 = !DILocation(line: 0, scope: !14)
-!20 = !DILocation(line: 8, column: 9, scope: !14)
+!20 = !DILocation(line: 13, column: 9, scope: !14)
 !21 = !{!22, !22, i64 0}
 !22 = !{!"int", !23, i64 0}
 !23 = !{!"omnipotent char", !24, i64 0}
 !24 = !{!"Simple C/C++ TBAA"}
-!25 = !DILocation(line: 8, column: 2, scope: !14)
-!26 = distinct !DISubprogram(name: "transform", scope: !3, file: !3, line: 11, type: !27, scopeLine: 11, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !29)
+!25 = !DILocation(line: 13, column: 2, scope: !14)
+!26 = distinct !DISubprogram(name: "transform", scope: !3, file: !3, line: 16, type: !27, scopeLine: 16, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !29)
 !27 = !DISubroutineType(types: !28)
 !28 = !{!7, !7, !7, !7}
 !29 = !{!30, !31, !32}
-!30 = !DILocalVariable(name: "idx", arg: 1, scope: !26, file: !3, line: 11, type: !7)
-!31 = !DILocalVariable(name: "scale", arg: 2, scope: !26, file: !3, line: 11, type: !7)
-!32 = !DILocalVariable(name: "offset", arg: 3, scope: !26, file: !3, line: 11, type: !7)
+!30 = !DILocalVariable(name: "idx", arg: 1, scope: !26, file: !3, line: 16, type: !7)
+!31 = !DILocalVariable(name: "scale", arg: 2, scope: !26, file: !3, line: 16, type: !7)
+!32 = !DILocalVariable(name: "offset", arg: 3, scope: !26, file: !3, line: 16, type: !7)
 !33 = !DILocation(line: 0, scope: !26)
-!34 = !DILocation(line: 12, column: 15, scope: !26)
-!35 = !DILocation(line: 12, column: 21, scope: !26)
-!36 = !DILocation(line: 12, column: 2, scope: !26)
-!37 = distinct !DISubprogram(name: "useKey", scope: !3, file: !3, line: 15, type: !15, scopeLine: 15, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !38)
+!34 = !DILocation(line: 17, column: 15, scope: !26)
+!35 = !DILocation(line: 17, column: 21, scope: !26)
+!36 = !DILocation(line: 17, column: 2, scope: !26)
+!37 = distinct !DISubprogram(name: "useKey", scope: !3, file: !3, line: 21, type: !15, scopeLine: 21, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !38)
 !38 = !{!39, !40, !41}
-!39 = !DILocalVariable(name: "idx", arg: 1, scope: !37, file: !3, line: 15, type: !7)
-!40 = !DILocalVariable(name: "sum", scope: !37, file: !3, line: 16, type: !7)
-!41 = !DILocalVariable(name: "i", scope: !37, file: !3, line: 17, type: !7)
+!39 = !DILocalVariable(name: "idx", arg: 1, scope: !37, file: !3, line: 21, type: !7)
+!40 = !DILocalVariable(name: "sum", scope: !37, file: !3, line: 22, type: !7)
+!41 = !DILocalVariable(name: "i", scope: !37, file: !3, line: 23, type: !7)
 !42 = !DILocation(line: 0, scope: !37)
-!43 = !DILocation(line: 18, column: 2, scope: !37)
+!43 = !DILocation(line: 24, column: 2, scope: !37)
 !44 = !DILocation(line: 0, scope: !14, inlinedAt: !45)
-!45 = distinct !DILocation(line: 19, column: 10, scope: !46)
-!46 = distinct !DILexicalBlock(scope: !37, file: !3, line: 18, column: 12)
-!47 = !DILocation(line: 8, column: 9, scope: !14, inlinedAt: !45)
-!48 = !DILocation(line: 19, column: 7, scope: !46)
-!49 = !DILocation(line: 21, column: 9, scope: !50)
-!50 = distinct !DILexicalBlock(scope: !46, file: !3, line: 21, column: 7)
-!51 = !DILocation(line: 21, column: 7, scope: !46)
+!45 = distinct !DILocation(line: 26, column: 10, scope: !46)
+!46 = distinct !DILexicalBlock(scope: !37, file: !3, line: 24, column: 12)
+!47 = !DILocation(line: 13, column: 9, scope: !14, inlinedAt: !45)
+!48 = !DILocation(line: 26, column: 7, scope: !46)
+!49 = !DILocation(line: 27, column: 9, scope: !50)
+!50 = distinct !DILexicalBlock(scope: !46, file: !3, line: 27, column: 7)
+!51 = !DILocation(line: 27, column: 7, scope: !46)
 !52 = distinct !{!52, !43, !53, !54}
-!53 = !DILocation(line: 24, column: 2, scope: !37)
+!53 = !DILocation(line: 32, column: 2, scope: !37)
 !54 = !{!"llvm.loop.unroll.disable"}
-!55 = !DILocation(line: 26, column: 2, scope: !37)
-!56 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 29, type: !57, scopeLine: 29, flags: DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !4)
+!55 = !DILocation(line: 34, column: 2, scope: !37)
+!56 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 37, type: !57, scopeLine: 37, flags: DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !4)
 !57 = !DISubroutineType(types: !58)
 !58 = !{!7}
 !59 = !DILocation(line: 0, scope: !37, inlinedAt: !60)
-!60 = distinct !DILocation(line: 30, column: 9, scope: !56)
-!61 = !DILocation(line: 18, column: 2, scope: !37, inlinedAt: !60)
+!60 = distinct !DILocation(line: 38, column: 9, scope: !56)
+!61 = !DILocation(line: 24, column: 2, scope: !37, inlinedAt: !60)
 !62 = !DILocation(line: 0, scope: !14, inlinedAt: !63)
-!63 = distinct !DILocation(line: 19, column: 10, scope: !46, inlinedAt: !60)
-!64 = !DILocation(line: 8, column: 9, scope: !14, inlinedAt: !63)
-!65 = !DILocation(line: 19, column: 7, scope: !46, inlinedAt: !60)
-!66 = !DILocation(line: 21, column: 7, scope: !46, inlinedAt: !60)
+!63 = distinct !DILocation(line: 26, column: 10, scope: !46, inlinedAt: !60)
+!64 = !DILocation(line: 13, column: 9, scope: !14, inlinedAt: !63)
+!65 = !DILocation(line: 26, column: 7, scope: !46, inlinedAt: !60)
+!66 = !DILocation(line: 27, column: 7, scope: !46, inlinedAt: !60)
 !67 = distinct !{!67, !61, !68, !54}
-!68 = !DILocation(line: 24, column: 2, scope: !37, inlinedAt: !60)
-!69 = !DILocation(line: 30, column: 2, scope: !56)
+!68 = !DILocation(line: 32, column: 2, scope: !37, inlinedAt: !60)
+!69 = !DILocation(line: 38, column: 2, scope: !56)

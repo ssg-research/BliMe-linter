@@ -6,29 +6,46 @@
 
 ; CFLAGS: --target=x86_64  -Wall -O2 -Xclang -disable-lifetime-markers  -fno-discard-value-names  -fno-unroll-loops -gdwarf
 
-; XFAIL: *
-; FIXME: Add proper checks here and remove XFAIL.
+; 
+; #define noinline __attribute__((noinline))
+; #define blinded __attribute__((blinded))
 ; 
 ; int arr[100];
+; int g_var = 1;
 ; 
-; int zero(int idx) {
-; 	return 0 * idx;
+; Just eats up a blinded value without further analysis
+; void intoTheVoid(blinded int i);
+; 
+; noinline void sink(int i) {
+;   intoTheVoid(i);
+; };
+; 
+; Should get a blinded variant that simply resets blindedness
+; noinline int zero(int idx) {
+;   sink(idx); // This prevents the compiler from optimizing out calls to this.
+; 	return (0 * idx) + g_var; // Add global so compiler cannot ignore return
 ; }
 ; 
-; int accessArray(int idx) {
-; 	return arr[idx];
-; }
-; 
+; noinline
 ; int transform(int idx, int scale, int offset) {
-; 	return scale * idx + offset;
+;   sink(idx); // This prevents the compiler from optimizing out calls to this.
+; 	return scale * idx + offset; // Should get tainted if any of the args are.
 ; }
 ; 
-; int useKey2(__attribute__((blinded)) int idx) {
-; 	return zero(accessArray(transform(idx, 2, 1))) + accessArray(transform(0, 0, 0));
-; }
-; 
-; int main() {
-; 	return useKey2(5);
+; We should se one unblinded and one blinded sink call here
+; CHECK-LABEL: @test
+; CHECK: call {{.*}} @transform.{{[a-z0-9]+}}(
+; CHECK: call {{.*}} @zero.{{[a-z0-9]+}}(
+; CHECK: call {{.*}} @sink(
+; CHECK: call {{.*}} @transform.{{[a-z0-9]+}}(
+; CHECK: call {{.*}} @sink.{{[a-z0-9]+}}(
+; CHECK: ret i32 57687
+; int test(blinded int idx) {
+;   // We expect the zero function to not return a blind value!
+;   sink(zero(transform(idx, 2, 1)));
+;   // But plain old transform with blinded inputs should!
+;   sink(transform(idx, 2, 1));
+;   return 57687;
 ; }
 
 
@@ -54,121 +71,122 @@ define dso_local void @doNothingIntP(i32* nocapture) {
   ret void
 }
 
-@arr = dso_local local_unnamed_addr global [100 x i32] zeroinitializer, align 16, !dbg !0
+@g_var = dso_local local_unnamed_addr global i32 1, align 4, !dbg !0
+@arr = dso_local local_unnamed_addr global [100 x i32] zeroinitializer, align 16, !dbg !6
 
-; Function Attrs: norecurse nounwind readnone uwtable
-define dso_local i32 @zero(i32 %idx) local_unnamed_addr #0 !dbg !14 {
+; Function Attrs: noinline nounwind uwtable
+define dso_local void @sink(i32 %i) local_unnamed_addr #0 !dbg !16 {
 entry:
-  call void @llvm.dbg.value(metadata i32 undef, metadata !18, metadata !DIExpression()), !dbg !19
-  ret i32 0, !dbg !20
+  call void @llvm.dbg.value(metadata i32 %i, metadata !20, metadata !DIExpression()), !dbg !21
+  tail call void @intoTheVoid(i32 %i) #4, !dbg !22
+  ret void, !dbg !23
 }
 
-; Function Attrs: norecurse nounwind readonly uwtable
-define dso_local i32 @accessArray(i32 %idx) local_unnamed_addr #1 !dbg !21 {
+declare !dbg !24 dso_local void @intoTheVoid(i32) local_unnamed_addr #1
+
+; Function Attrs: noinline nounwind uwtable
+define dso_local i32 @zero(i32 %idx) local_unnamed_addr #0 !dbg !25 {
 entry:
-  call void @llvm.dbg.value(metadata i32 %idx, metadata !23, metadata !DIExpression()), !dbg !24
-  %idxprom = sext i32 %idx to i64, !dbg !25
-  %arrayidx = getelementptr inbounds [100 x i32], [100 x i32]* @arr, i64 0, i64 %idxprom, !dbg !25
-  %0 = load i32, i32* %arrayidx, align 4, !dbg !25, !tbaa !26
-  ret i32 %0, !dbg !30
+  call void @llvm.dbg.value(metadata i32 %idx, metadata !29, metadata !DIExpression()), !dbg !30
+  tail call void @sink(i32 %idx), !dbg !31
+  %0 = load i32, i32* @g_var, align 4, !dbg !32, !tbaa !33
+  ret i32 %0, !dbg !37
 }
 
-; Function Attrs: norecurse nounwind readnone uwtable
-define dso_local i32 @transform(i32 %idx, i32 %scale, i32 %offset) local_unnamed_addr #0 !dbg !31 {
+; Function Attrs: noinline nounwind uwtable
+define dso_local i32 @transform(i32 %idx, i32 %scale, i32 %offset) local_unnamed_addr #0 !dbg !38 {
 entry:
-  call void @llvm.dbg.value(metadata i32 %idx, metadata !35, metadata !DIExpression()), !dbg !38
-  call void @llvm.dbg.value(metadata i32 %scale, metadata !36, metadata !DIExpression()), !dbg !38
-  call void @llvm.dbg.value(metadata i32 %offset, metadata !37, metadata !DIExpression()), !dbg !38
-  %mul = mul nsw i32 %scale, %idx, !dbg !39
-  %add = add nsw i32 %mul, %offset, !dbg !40
-  ret i32 %add, !dbg !41
+  call void @llvm.dbg.value(metadata i32 %idx, metadata !42, metadata !DIExpression()), !dbg !45
+  call void @llvm.dbg.value(metadata i32 %scale, metadata !43, metadata !DIExpression()), !dbg !45
+  call void @llvm.dbg.value(metadata i32 %offset, metadata !44, metadata !DIExpression()), !dbg !45
+  tail call void @sink(i32 %idx), !dbg !46
+  %mul = mul nsw i32 %scale, %idx, !dbg !47
+  %add = add nsw i32 %mul, %offset, !dbg !48
+  ret i32 %add, !dbg !49
 }
 
-; Function Attrs: norecurse nounwind readonly uwtable
-define dso_local i32 @useKey2(i32 blinded %idx) local_unnamed_addr #1 !dbg !42 {
+; Function Attrs: nounwind uwtable
+define dso_local i32 @test(i32 blinded %idx) local_unnamed_addr #2 !dbg !50 {
 entry:
-  call void @llvm.dbg.value(metadata i32 %idx, metadata !44, metadata !DIExpression()), !dbg !45
-  call void @llvm.dbg.value(metadata i32 0, metadata !23, metadata !DIExpression()), !dbg !46
-  %0 = load i32, i32* getelementptr inbounds ([100 x i32], [100 x i32]* @arr, i64 0, i64 0), align 16, !dbg !48, !tbaa !26
-  ret i32 %0, !dbg !49
-}
-
-; Function Attrs: norecurse nounwind readonly uwtable
-define dso_local i32 @main() local_unnamed_addr #1 !dbg !50 {
-entry:
-  call void @llvm.dbg.value(metadata i32 5, metadata !44, metadata !DIExpression()), !dbg !53
-  call void @llvm.dbg.value(metadata i32 0, metadata !23, metadata !DIExpression()), !dbg !55
-  %0 = load i32, i32* getelementptr inbounds ([100 x i32], [100 x i32]* @arr, i64 0, i64 0), align 16, !dbg !57, !tbaa !26
-  ret i32 %0, !dbg !58
+  call void @llvm.dbg.value(metadata i32 %idx, metadata !52, metadata !DIExpression()), !dbg !53
+  %call = tail call i32 @transform(i32 %idx, i32 2, i32 1), !dbg !54
+  %call1 = tail call i32 @zero(i32 %call), !dbg !55
+  tail call void @sink(i32 %call1), !dbg !56
+  %call2 = tail call i32 @transform(i32 %idx, i32 2, i32 1), !dbg !57
+  tail call void @sink(i32 %call2), !dbg !58
+  ret i32 57687, !dbg !59
 }
 
 ; Function Attrs: nounwind readnone speculatable willreturn
-declare void @llvm.dbg.value(metadata, metadata, metadata) #2
+declare void @llvm.dbg.value(metadata, metadata, metadata) #3
 
-attributes #0 = { norecurse nounwind readnone uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
-attributes #1 = { norecurse nounwind readonly uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
-attributes #2 = { nounwind readnone speculatable willreturn }
+attributes #0 = { noinline nounwind uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #1 = { "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #2 = { nounwind uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #3 = { nounwind readnone speculatable willreturn }
+attributes #4 = { nounwind }
 
 !llvm.dbg.cu = !{!2}
-!llvm.module.flags = !{!10, !11, !12}
-!llvm.ident = !{!13}
+!llvm.module.flags = !{!12, !13, !14}
+!llvm.ident = !{!15}
 
 !0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
-!1 = distinct !DIGlobalVariable(name: "arr", scope: !2, file: !3, line: 5, type: !6, isLocal: false, isDefinition: true)
+!1 = distinct !DIGlobalVariable(name: "g_var", scope: !2, file: !3, line: 7, type: !9, isLocal: false, isDefinition: true)
 !2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 11.0", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5, splitDebugInlining: false, nameTableKind: None)
 !3 = !DIFile(filename: "BlindedComputation/Transforms/funcgen-return_value_blinding.c", directory: "/home/ishkamiel/d/llvm/bc/llvm-test")
 !4 = !{}
-!5 = !{!0}
-!6 = !DICompositeType(tag: DW_TAG_array_type, baseType: !7, size: 3200, elements: !8)
-!7 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
-!8 = !{!9}
-!9 = !DISubrange(count: 100)
-!10 = !{i32 7, !"Dwarf Version", i32 4}
-!11 = !{i32 2, !"Debug Info Version", i32 3}
-!12 = !{i32 1, !"wchar_size", i32 4}
-!13 = !{!"clang version 11.0.0"}
-!14 = distinct !DISubprogram(name: "zero", scope: !3, file: !3, line: 7, type: !15, scopeLine: 7, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !17)
-!15 = !DISubroutineType(types: !16)
-!16 = !{!7, !7}
-!17 = !{!18}
-!18 = !DILocalVariable(name: "idx", arg: 1, scope: !14, file: !3, line: 7, type: !7)
-!19 = !DILocation(line: 0, scope: !14)
-!20 = !DILocation(line: 8, column: 2, scope: !14)
-!21 = distinct !DISubprogram(name: "accessArray", scope: !3, file: !3, line: 11, type: !15, scopeLine: 11, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !22)
-!22 = !{!23}
-!23 = !DILocalVariable(name: "idx", arg: 1, scope: !21, file: !3, line: 11, type: !7)
-!24 = !DILocation(line: 0, scope: !21)
-!25 = !DILocation(line: 12, column: 9, scope: !21)
-!26 = !{!27, !27, i64 0}
-!27 = !{!"int", !28, i64 0}
-!28 = !{!"omnipotent char", !29, i64 0}
-!29 = !{!"Simple C/C++ TBAA"}
-!30 = !DILocation(line: 12, column: 2, scope: !21)
-!31 = distinct !DISubprogram(name: "transform", scope: !3, file: !3, line: 15, type: !32, scopeLine: 15, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !34)
-!32 = !DISubroutineType(types: !33)
-!33 = !{!7, !7, !7, !7}
-!34 = !{!35, !36, !37}
-!35 = !DILocalVariable(name: "idx", arg: 1, scope: !31, file: !3, line: 15, type: !7)
-!36 = !DILocalVariable(name: "scale", arg: 2, scope: !31, file: !3, line: 15, type: !7)
-!37 = !DILocalVariable(name: "offset", arg: 3, scope: !31, file: !3, line: 15, type: !7)
-!38 = !DILocation(line: 0, scope: !31)
-!39 = !DILocation(line: 16, column: 15, scope: !31)
-!40 = !DILocation(line: 16, column: 21, scope: !31)
-!41 = !DILocation(line: 16, column: 2, scope: !31)
-!42 = distinct !DISubprogram(name: "useKey2", scope: !3, file: !3, line: 19, type: !15, scopeLine: 19, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !43)
-!43 = !{!44}
-!44 = !DILocalVariable(name: "idx", arg: 1, scope: !42, file: !3, line: 19, type: !7)
-!45 = !DILocation(line: 0, scope: !42)
-!46 = !DILocation(line: 0, scope: !21, inlinedAt: !47)
-!47 = distinct !DILocation(line: 20, column: 51, scope: !42)
-!48 = !DILocation(line: 12, column: 9, scope: !21, inlinedAt: !47)
-!49 = !DILocation(line: 20, column: 2, scope: !42)
-!50 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 23, type: !51, scopeLine: 23, flags: DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !4)
-!51 = !DISubroutineType(types: !52)
-!52 = !{!7}
-!53 = !DILocation(line: 0, scope: !42, inlinedAt: !54)
-!54 = distinct !DILocation(line: 24, column: 9, scope: !50)
-!55 = !DILocation(line: 0, scope: !21, inlinedAt: !56)
-!56 = distinct !DILocation(line: 20, column: 51, scope: !42, inlinedAt: !54)
-!57 = !DILocation(line: 12, column: 9, scope: !21, inlinedAt: !56)
-!58 = !DILocation(line: 24, column: 2, scope: !50)
+!5 = !{!0, !6}
+!6 = !DIGlobalVariableExpression(var: !7, expr: !DIExpression())
+!7 = distinct !DIGlobalVariable(name: "arr", scope: !2, file: !3, line: 6, type: !8, isLocal: false, isDefinition: true)
+!8 = !DICompositeType(tag: DW_TAG_array_type, baseType: !9, size: 3200, elements: !10)
+!9 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
+!10 = !{!11}
+!11 = !DISubrange(count: 100)
+!12 = !{i32 7, !"Dwarf Version", i32 4}
+!13 = !{i32 2, !"Debug Info Version", i32 3}
+!14 = !{i32 1, !"wchar_size", i32 4}
+!15 = !{!"clang version 11.0.0"}
+!16 = distinct !DISubprogram(name: "sink", scope: !3, file: !3, line: 12, type: !17, scopeLine: 12, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !19)
+!17 = !DISubroutineType(types: !18)
+!18 = !{null, !9}
+!19 = !{!20}
+!20 = !DILocalVariable(name: "i", arg: 1, scope: !16, file: !3, line: 12, type: !9)
+!21 = !DILocation(line: 0, scope: !16)
+!22 = !DILocation(line: 13, column: 3, scope: !16)
+!23 = !DILocation(line: 14, column: 1, scope: !16)
+!24 = !DISubprogram(name: "intoTheVoid", scope: !3, file: !3, line: 10, type: !17, flags: DIFlagPrototyped, spFlags: DISPFlagOptimized, retainedNodes: !4)
+!25 = distinct !DISubprogram(name: "zero", scope: !3, file: !3, line: 17, type: !26, scopeLine: 17, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !28)
+!26 = !DISubroutineType(types: !27)
+!27 = !{!9, !9}
+!28 = !{!29}
+!29 = !DILocalVariable(name: "idx", arg: 1, scope: !25, file: !3, line: 17, type: !9)
+!30 = !DILocation(line: 0, scope: !25)
+!31 = !DILocation(line: 18, column: 3, scope: !25)
+!32 = !DILocation(line: 19, column: 21, scope: !25)
+!33 = !{!34, !34, i64 0}
+!34 = !{!"int", !35, i64 0}
+!35 = !{!"omnipotent char", !36, i64 0}
+!36 = !{!"Simple C/C++ TBAA"}
+!37 = !DILocation(line: 19, column: 2, scope: !25)
+!38 = distinct !DISubprogram(name: "transform", scope: !3, file: !3, line: 23, type: !39, scopeLine: 23, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !41)
+!39 = !DISubroutineType(types: !40)
+!40 = !{!9, !9, !9, !9}
+!41 = !{!42, !43, !44}
+!42 = !DILocalVariable(name: "idx", arg: 1, scope: !38, file: !3, line: 23, type: !9)
+!43 = !DILocalVariable(name: "scale", arg: 2, scope: !38, file: !3, line: 23, type: !9)
+!44 = !DILocalVariable(name: "offset", arg: 3, scope: !38, file: !3, line: 23, type: !9)
+!45 = !DILocation(line: 0, scope: !38)
+!46 = !DILocation(line: 24, column: 3, scope: !38)
+!47 = !DILocation(line: 25, column: 15, scope: !38)
+!48 = !DILocation(line: 25, column: 21, scope: !38)
+!49 = !DILocation(line: 25, column: 2, scope: !38)
+!50 = distinct !DISubprogram(name: "test", scope: !3, file: !3, line: 36, type: !26, scopeLine: 36, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !51)
+!51 = !{!52}
+!52 = !DILocalVariable(name: "idx", arg: 1, scope: !50, file: !3, line: 36, type: !9)
+!53 = !DILocation(line: 0, scope: !50)
+!54 = !DILocation(line: 38, column: 13, scope: !50)
+!55 = !DILocation(line: 38, column: 8, scope: !50)
+!56 = !DILocation(line: 38, column: 3, scope: !50)
+!57 = !DILocation(line: 40, column: 8, scope: !50)
+!58 = !DILocation(line: 40, column: 3, scope: !50)
+!59 = !DILocation(line: 41, column: 3, scope: !50)
