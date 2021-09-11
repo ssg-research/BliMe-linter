@@ -197,15 +197,47 @@ static bool expandBlindedArrayAccesses(Function &F,
   return MadeChange;
 }
 
+Function *BlindedInstrConversionPass::generateBlindedCopy(
+    Twine &Name, Function &F, ArrayRef<unsigned> ParamNos) {
+
+  ValueMap<const Value *, WeakTrackingVH> Map;
+
+  const auto *const OrigFuncTy = F.getFunctionType();
+
+  std::vector<Type *> ArgTypes;
+  for (const Argument &I : F.args())
+    ArgTypes.push_back(I.getType());
+
+  auto *FTy = FunctionType::get(OrigFuncTy->getReturnType(), ArgTypes,
+                                OrigFuncTy->isVarArg());
+
+  auto *NewF = Function::Create(FTy, F.getLinkage(), F.getAddressSpace(), Name,
+                                F.getParent());
+
+  Function::arg_iterator DestI = NewF->arg_begin();
+  for (const Argument &I : F.args()) {
+    DestI->setName(I.getName());
+    Map[&I] = &*DestI++;
+  }
+
+  SmallVector<ReturnInst *, 8> Returns;
+  CloneFunctionInto(NewF, &F, Map, F.getSubprogram() != nullptr, Returns,
+                    "", nullptr);
+
+  for (unsigned ParamNo : ParamNos)
+    NewF->addParamAttr(ParamNo, Attribute::Blinded);
+
+  return NewF;
+}
+
 /// Ensure CallBase calls a function with the ParamNos args blinded
 ///
 /// This will potentially also generate a new copy of the called function F,
 /// unless the function already conforms to the required blindedness properties.
-bool BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &CB,
-                                                                      Function &F,
-                                                                      ArrayRef<unsigned> ParamNos,
-                                                                      FunctionAnalysisManager &AM,
-                                                                      SmallSet<Function *, 8> &VisitedFunctions) {
+bool BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(
+    CallBase &CB, Function &F, ArrayRef<unsigned> ParamNos,
+    FunctionAnalysisManager &AM, SmallSet<Function *, 8> &VisitedFunctions) {
+
   if (F.size() == 0) {
     // assume functions outside of this module will not return tainted values
     return false;
@@ -217,45 +249,27 @@ bool BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(CallBase &
     return true;
   }
 
-  unsigned BlindedParamIdentifier = 0;
-  for (unsigned ParamNo : ParamNos) BlindedParamIdentifier |= 1 << ParamNo;
-  Twine BlindedFunctionName = F.getName() + "." + Twine(BlindedParamIdentifier);
+  // Generate blinded identifier of type NAME.BITMAP, where the BITMAP has a 1
+  // for the position (starting from right) of blinded arguments.
+  Twine NewName = F.getName() + "." + Twine(arrToBitmap(ParamNos));
 
-  SmallString<128> BlindedFunctionNameVector;
-  Function *BlindedFunction = F.getParent()->getFunction(BlindedFunctionName.toStringRef(BlindedFunctionNameVector));
+  SmallString<128> NameVec;
+  auto *BlindedFunc = F.getParent()->getFunction(NewName.toStringRef(NameVec));
 
-  if (VisitedFunctions.count(BlindedFunction)) {
-    // we have a cycle, assume the return value from the function being called will be tainted
+  if (VisitedFunctions.count(BlindedFunc)) {
+    // we have a cycle, assume return value of called function will be tainted
     return true;
   }
 
-  if (!BlindedFunction) {
-    // blinded function does not already exist, create it
-    ValueMap<const Value *, WeakTrackingVH> Map;
-    std::vector<Type*> ArgTypes;
-    for (const Argument &I : F.args()) ArgTypes.push_back(I.getType());
-    FunctionType *FTy = FunctionType::get(F.getFunctionType()->getReturnType(), ArgTypes, F.getFunctionType()->isVarArg());
-    BlindedFunction = Function::Create(FTy, F.getLinkage(), F.getAddressSpace(), BlindedFunctionName, F.getParent());
-
-    Function::arg_iterator DestI = BlindedFunction->arg_begin();
-    for (const Argument &I : F.args()) {
-      DestI->setName(I.getName());
-      Map[&I] = &*DestI++;
-    }
-
-    SmallVector<ReturnInst *, 8> Returns;
-    CloneFunctionInto(BlindedFunction, &F, Map, F.getSubprogram() != nullptr, Returns, "", nullptr);
-
-    for (unsigned ParamNo : ParamNos) {
-      BlindedFunction->addParamAttr(ParamNo, Attribute::Blinded);
-    }
-
-    AM.invalidate(*BlindedFunction, run(*BlindedFunction, AM, VisitedFunctions));
+  if (!BlindedFunc) {
+    // The function doesn't exist yet, let's create it then!
+    BlindedFunc = generateBlindedCopy(NewName, F, ParamNos);
+    AM.invalidate(*BlindedFunc, run(*BlindedFunc, AM, VisitedFunctions));
   }
 
-  CB.setCalledFunction(BlindedFunction);
+  CB.setCalledFunction(BlindedFunc);
 
-  return BlindedFunction->hasFnAttribute(Attribute::Blinded);
+  return BlindedFunc->hasFnAttribute(Attribute::Blinded);
 }
 
 /// Check calls in F to make sure they call blinded permutations of the callee

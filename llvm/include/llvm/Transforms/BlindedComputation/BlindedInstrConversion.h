@@ -30,6 +30,18 @@ private:
   bool runImpl(Function &F, AAManager::Result &AA, TaintedRegisters &TR,
                BlindedDataUsage &BDU, FunctionAnalysisManager &AM,
                SmallSet<Function *, 8> &VisitedFunctions);
+
+  Function *generateBlindedCopy(Twine &NewName, Function &OrigFunc,
+                                ArrayRef<unsigned> ParamNos);
+
+  static inline unsigned arrToBitmap(ArrayRef<unsigned> &Arr) {
+    unsigned Result = 0;
+    for (unsigned n : Arr) {
+      assert(n < UINT_WIDTH);
+      Result |= (1 << n);
+    }
+    return Result;
+  }
 };
 
 } // namespace llvm
