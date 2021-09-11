@@ -25,6 +25,8 @@ private:
       Function &F, AAManager::Result &AA, TaintedRegisters &TR,
       FunctionAnalysisManager &AM, SmallSet<Function *, 8> &VisitedFunctions);
 
+  bool linearizeSelectInstructions(Function &F);
+
   bool runImpl(Function &F, AAManager::Result &AA, TaintedRegisters &TR,
                BlindedDataUsage &BDU, FunctionAnalysisManager &AM,
                SmallSet<Function *, 8> &VisitedFunctions);
