@@ -22,10 +22,19 @@ namespace llvm {
 // FIXME: Needs to report multiple policy violations!
 class BlindedDataUsage {
 public:
+  typedef DenseSet<std::pair<Instruction *, StringRef>> Violations_t;
+  typedef Violations_t::const_iterator Violations_iterator;
+  typedef iterator_range<Violations_iterator> Violations_range;
+
   BlindedDataUsage(Function &F) : F(F) {}
 
-  void validateBlindedData(TaintedRegisters &TR, AAManager::Result &AA);
+  bool validateBlindedData(TaintedRegisters &TR, AAManager::Result &AA);
+  Violations_range violations() { return Violations; }
+
 private:
+  bool IsDone = false;
+  Violations_t Violations;
+
   /// The function whose blinded data we are validating.
   Function &F;
 };
