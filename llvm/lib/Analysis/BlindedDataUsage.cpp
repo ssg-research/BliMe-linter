@@ -38,6 +38,9 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
       // TODO: Move to printer pass and pretty print the DebugLoc (if defined)
       Inst.getDebugLoc().print(errs());
 
+      // TODO: Add Instruction and explanation to Violations list
+      //Violations.insert(...);
+
       // FIXME: Don't use assert here!
       assert(false && "Invalid use of blinded data as operand of BranchInst!");
     }
