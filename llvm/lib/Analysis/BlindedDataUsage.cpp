@@ -11,13 +11,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/BlindedDataUsage.h"
+#include "llvm/Analysis/CFLSteensAliasAnalysis.h"
 #include "llvm/IR/InstIterator.h"
 
 using namespace llvm;
 
-void BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
+bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
                                            AAManager::Result &AA) {
+  if (IsDone)
+    // we're fine if no violations have been found
+    return Violations.empty();
+
   auto &TRSet = TR.getTaintedRegisters(&AA);
 
   for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
@@ -29,6 +35,9 @@ void BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
     }
 
     if (isa<BranchInst>(&Inst)) {
+      // TODO: Move to printer pass and pretty print the DebugLoc (if defined)
+      Inst.getDebugLoc().print(errs());
+
       // FIXME: Don't use assert here!
       assert(false && "Invalid use of blinded data as operand of BranchInst!");
     }
@@ -43,6 +52,9 @@ void BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
       }
     }
   }
+
+  IsDone = true;
+  return Violations.empty();
 }
 
 AnalysisKey BlindedDataUsageAnalysis::Key;
@@ -52,17 +64,50 @@ BlindedDataUsage BlindedDataUsageAnalysis::run(Function &F,
 }
 
 PreservedAnalyses BlindedDataUsagePrinterPass::run(Function &F, FunctionAnalysisManager &AM) {
-  auto &TaintedRegs = AM.getResult<BlindedDataUsageAnalysis>(F);
+  // Get alias analysis results from the BasicAA and Steensgard's AA
+  auto &BasicAAResult = AM.getResult<BasicAA>(F);
+  auto &SteensAAResult = AM.getResult<CFLSteensAA>(F);
+  // Create an AAResult to track the AA results
+  auto &AAResult = AM.getResult<AAManager>(F);
+  AAResult.addAAResult(SteensAAResult);
+  AAResult.addAAResult(BasicAAResult);
 
-  // TODO: Print out the results
-  //
-  // Note, for this to work, the BlindedDataUsageAnalysis must first be updated
-  // such that it doesn't immediately crash on failures, but instead returns
-  // a list/set/data-structure with the violating instructions.
-  OS << __FUNCTION__ << " isn't done yet!\n";
-  llvm_unreachable("unimplemented");
+  // Create our analysis objects for F
+  auto &TRS = AM.getResult<TaintTrackingAnalysis>(F);
+  auto &BDU = AM.getResult<BlindedDataUsageAnalysis>(F);
 
+  if (!BDU.validateBlindedData(TRS, AAResult)) {
+    // Got some violations, now pretty print them since we're a printer pass!
+
+    // TODO: Print out the results
+    // 
+    // Note, for this to work, the BlindedDataUsageAnalysis validateBlindedData
+    // function must first be updated such that it doesn't immediately crash on
+    // failures. There is an initial Violations container for storing results,
+    // but it can be adapted as needed.
+    // 
+    // Output should probably be silent for non-violating functions, and for
+    // others start with saysing something like "Violations found for function"
+    // and then listing violations. 
+    OS << __FUNCTION__ << " isn't done yet!\n";
+    llvm_unreachable("unimplemented");
+    
+    for (auto &V : BDU.violations()) { 
+      // TODO: Print them out
+      // 
+      // Each entry should contain some location indicator (if available, based
+      // on a DebugLoc that points to the original source file) and an
+      // explanation of why this is a violation. The explanation can be
+      // essentially just the original string from the asserts.
+    } }
+    
+  // Tell the pass manager we don't invalidate any of the used analyses
   PreservedAnalyses PA;
   PA.preserve<BlindedDataUsageAnalysis>();
+  PA.preserve<TaintTrackingAnalysis>();
+  PA.preserve<AAManager>();
+  PA.preserve<BasicAA>();
+  PA.preserve<CFLSteensAA>();
+
   return PA;
 }
