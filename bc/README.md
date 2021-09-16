@@ -50,7 +50,7 @@ cmake -G Ninja \
   -DLLVM_BUILD_TOOLS:BOOL=Off \
   -DLLVM_PARALLEL_LINK_JOBS:STRING=4 \
   -DLLVM_PARALLEL_COMPILE_JOBS:STRING=8 \
-  ..
+  ../..
 ```
 
 Consult [LLVM docs on CMake] for details. In particular, adjust
