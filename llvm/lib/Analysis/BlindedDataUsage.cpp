@@ -10,6 +10,7 @@
 // Copyright: Secure System Group, University of waterloo
 //
 //===----------------------------------------------------------------------===//
+// XFAIL: *
 
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/BlindedDataUsage.h"
@@ -36,27 +37,33 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
 
     if (isa<BranchInst>(&Inst)) {
       // TODO: Move to printer pass and pretty print the DebugLoc (if defined)
-      Inst.getDebugLoc().print(errs());
+      // Inst.getDebugLoc().print(errs());
 
       // TODO: Add Instruction and explanation to Violations list
-      //Violations.insert(...);
+      // Violations.insert(...);
+      std::pair<Instruction *, StringRef> Violation_Instance (&Inst, "Invalid use of blinded data as operand of BranchInst!");
+      Violations.insert(Violation_Instance);
 
       // FIXME: Don't use assert here!
-      assert(false && "Invalid use of blinded data as operand of BranchInst!");
+      
+      // assert(false && "Invalid use of blinded data as operand of BranchInst!");
     }
 
     if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&Inst)) {
       for (auto Idx = GEP->idx_begin(); Idx != GEP->idx_end(); ++Idx) {
         if (TRSet.contains(*Idx)) {
+          std::pair<Instruction *, StringRef> Violation_Instance (&Inst, StringRef("Invalid use of blinded data as index of varying-size array!"));
+          Violations.insert(Violation_Instance);
           // FIXME: Don't use assert here!
-          assert(GEP->getSourceElementType()->isArrayTy() &&
-                 "Invalid use of blinded data as index of varying-size array!");
+          // assert(GEP->getSourceElementType()->isArrayTy() &&
+          //        "Invalid use of blinded data as index of varying-size array!");
         }
       }
     }
   }
-
+  
   IsDone = true;
+  
   return Violations.empty();
 }
 
@@ -92,12 +99,19 @@ PreservedAnalyses BlindedDataUsagePrinterPass::run(Function &F, FunctionAnalysis
     // Output should probably be silent for non-violating functions, and for
     // others start with saysing something like "Violations found for function"
     // and then listing violations. 
-    OS << __FUNCTION__ << " isn't done yet!\n";
-    llvm_unreachable("unimplemented");
+    // OS << "TRY!!!\n";
+    // OS << __FUNCTION__ << " isn't done yet!\n";
+    // llvm_unreachable("unimplemented");
     
     for (auto &V : BDU.violations()) { 
       // TODO: Print them out
       // 
+      
+      Instruction &Inst = *(V.first);
+      Inst.getDebugLoc().print(OS);
+      OS << "\n";
+      OS << "description: " << V.second << "\n\n";
+      // OS << Inst << "\n";
       // Each entry should contain some location indicator (if available, based
       // on a DebugLoc that points to the original source file) and an
       // explanation of why this is a violation. The explanation can be
