@@ -387,13 +387,26 @@ bool BlindedInstrConversionPass::linearizeSelectInstructions(Function &F) {
 
       assert(TrueValue->getType() == FalseValue->getType() && "Type mismatch");
 
+      // TrueValue->dump();
+      if (!TrueValue->getType()->isIntegerTy()) {
+        TrueValue = Builder.CreateBitCast(TrueValue,MaskType);
+        FalseValue = Builder.CreateBitCast(FalseValue,MaskType);
+      }
+
+      assert(TrueValue->getType()->isIntegerTy() && "expected TrueValue to be int");
+
       // Based on <https://github.com/veorq/cryptocoding#solution-1>
       auto *NegCondVal = Builder.CreateNeg(CondVal);
       auto *MaskVal = Builder.CreateSExtOrBitCast(NegCondVal,MaskType);
       auto *TmpXor = Builder.CreateXor(TrueValue, FalseValue);
       auto *TmpXorMasked = Builder.CreateAnd(MaskVal, TmpXor);
       auto *TmpResVal = Builder.CreateXor(TmpXorMasked, FalseValue);
-      auto *Result = Builder.CreateIntToPtr(TmpResVal, ResultType);
+      auto *Result = TmpResVal;
+      
+      if (ResultTypeIsPointer)
+        Result = Builder.CreateIntToPtr(TmpResVal, ResultType);
+      else if (Result->getType() != S->getType())
+        Result = Builder.CreateBitCast(Result,S->getType());
 
       S->replaceAllUsesWith(Result);
       RemoveList.push_back(S);
