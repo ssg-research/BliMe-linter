@@ -396,6 +396,31 @@ class Priv<string opcodestr, bits<7> funct7>
     : RVInstR<funct7, 0b000, OPC_SYSTEM, (outs), (ins GPR:$rs1, GPR:$rs2),
               opcodestr, "">;
 
+let hasSideEffects = 1, mayLoad = 0, mayStore = 1 in
+class BLND_class : RVInst<(outs), (ins GPR:$rs1, GPR:$rs2), 
+              "blnd", "$rs1, $rs2", [], InstFormatS> {
+  bits<5> rs2;
+  bits<5> rs1;
+
+  let Inst{31-25} = 0b0000001;
+  let Inst{24-20} = rs2;
+  let Inst{19-15} = rs1;
+  let Inst{14-12} = 0b000;
+  let Inst{11-7} = 0b00000;
+  let Opcode = OPC_BLND.Value;
+}
+
+let hasSideEffects = 1, mayLoad = 0, mayStore = 1 in
+class RBLND_class : RVInst<(outs), (ins), 
+              "rblnd", "", [], InstFormatS> {
+  let Inst{31-25} = 0b0000001;
+  let Inst{24-20} = 0b00000;
+  let Inst{19-15} = 0b00000;
+  let Inst{14-12} = 0b000;
+  let Inst{11-7} = 0b00000;
+  let Opcode = OPC_RBLND.Value;
+}
+
 //===----------------------------------------------------------------------===//
 // Instructions
 //===----------------------------------------------------------------------===//
@@ -465,6 +490,9 @@ def SRL  : ALU_rr<0b0000000, 0b101, "srl">, Sched<[WriteIALU, ReadIALU, ReadIALU
 def SRA  : ALU_rr<0b0100000, 0b101, "sra">, Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 def OR   : ALU_rr<0b0000000, 0b110, "or">, Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 def AND  : ALU_rr<0b0000000, 0b111, "and">, Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+
+def BLND  : BLND_class, Sched<[WriteSTW, ReadStoreData, ReadMemBase]>;
+def RBLND : RBLND_class, Sched<[WriteSTW, ReadStoreData, ReadMemBase]>;
 
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
 def FENCE : RVInstI<0b000, OPC_MISC_MEM, (outs),
