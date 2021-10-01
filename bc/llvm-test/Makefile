@@ -33,9 +33,9 @@ INSTALL_FILES = $(addprefix $(INSTALL_DIR), $(TEST_FILES))
 all: $(TEST_FILES)
 
 COMMON_DEPS = common.ll common.h FileCheck-header.ll Makefile
-TMP_FILES = 
+TMP_FILES = $(OBJ_FILES) $(TEST_FILES) $(OUT_FILES)
 
-$(TEST_FILES): %.ll : %.c $(COMMON_DEPS) 
+$(TEST_FILES): %.ll : %.c $(COMMON_DEPS)
 	@./gen_header.sh -cflags "$(CFLAGS)" -i $< > $@
 	$(CC) $(CFLAGS) -emit-llvm -c -S $< -o - | ./gen_body.sh >> $@
 
@@ -51,10 +51,6 @@ $(INSTALL_FILES): $(INSTALL_DIR)% : %
 .PHONY: clean
 clean:
 	rm -rf $(TMP_FILES)
-
-.PHONY: dist-clean
-dist-clean:
-	rm -rf $(TMP_FILES) $(TEST_FILES) $(OUT_FILES) $(OBJ_FILES)
 
 print-%: ; @echo $* = $($*)
 
