@@ -437,7 +437,12 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
   MadeChange |= linearizeSelectInstructions(F);
 
   // Verify our blinded data usage policies
-  BDU.validateBlindedData(TR, AA);
+  if(!BDU.validateBlindedData(TR, AA)){
+      for (auto &V : BDU.violations()) { 
+        errs() << V.second.str().c_str() << "\n";
+    }
+    llvm_unreachable("validateBlindedData returns 'false'")
+  }
 
   VisitedFunctions.erase(&F);
 
