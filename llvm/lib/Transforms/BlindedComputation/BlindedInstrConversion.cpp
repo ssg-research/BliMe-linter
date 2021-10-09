@@ -441,7 +441,7 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
       for (auto &V : BDU.violations()) { 
         errs() << V.second.str().c_str() << "\n";
     }
-    llvm_unreachable("validateBlindedData returns 'false'")
+    llvm_unreachable("validateBlindedData returns 'false'");
   }
 
   VisitedFunctions.erase(&F);
