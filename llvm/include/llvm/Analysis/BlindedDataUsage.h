@@ -7,7 +7,7 @@
 // Author: Eric Liu <e34liu@uwaterloo.ca>
 //         Hans Liljestrand <hans@liljestrand.dev>
 //
-// Copyright: Secure System Group, University of waterloo
+// Copyright: Secure System Group, University of Waterloo
 //
 //===----------------------------------------------------------------------===//
 

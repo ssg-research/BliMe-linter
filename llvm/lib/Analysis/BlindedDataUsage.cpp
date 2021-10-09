@@ -7,10 +7,9 @@
 // Author: Eric Liu <e34liu@uwaterloo.ca>
 //         Hans Liljestrand <hans@liljestrand.dev>
 //
-// Copyright: Secure System Group, University of waterloo
+// Copyright: Secure System Group, University of Waterloo
 //
 //===----------------------------------------------------------------------===//
-// XFAIL: *
 
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/BlindedDataUsage.h"
@@ -36,27 +35,18 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
     }
 
     if (isa<BranchInst>(&Inst)) {
-      // TODO: Move to printer pass and pretty print the DebugLoc (if defined)
-      // Inst.getDebugLoc().print(errs());
-
-      // TODO: Add Instruction and explanation to Violations list
-      // Violations.insert(...);
-      std::pair<Instruction *, StringRef> Violation_Instance (&Inst, "Invalid use of blinded data as operand of BranchInst!");
+      std::pair<Instruction *, StringRef> Violation_Instance(
+          &Inst, "Invalid use of blinded data as operand of BranchInst!");
       Violations.insert(Violation_Instance);
-
-      // FIXME: Don't use assert here!
-      
-      // assert(false && "Invalid use of blinded data as operand of BranchInst!");
     }
 
     if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&Inst)) {
       for (auto Idx = GEP->idx_begin(); Idx != GEP->idx_end(); ++Idx) {
         if (TRSet.contains(*Idx)) {
-          std::pair<Instruction *, StringRef> Violation_Instance (&Inst, StringRef("Invalid use of blinded data as index of varying-size array!"));
+          std::pair<Instruction *, StringRef> Violation_Instance(
+              &Inst, StringRef("Invalid use of blinded data as index of "
+                               "varying-size array!"));
           Violations.insert(Violation_Instance);
-          // FIXME: Don't use assert here!
-          // assert(GEP->getSourceElementType()->isArrayTy() &&
-          //        "Invalid use of blinded data as index of varying-size array!");
         }
       }
     }
@@ -73,7 +63,8 @@ BlindedDataUsage BlindedDataUsageAnalysis::run(Function &F,
   return BlindedDataUsage(F);
 }
 
-PreservedAnalyses BlindedDataUsagePrinterPass::run(Function &F, FunctionAnalysisManager &AM) {
+PreservedAnalyses BlindedDataUsagePrinterPass::run(Function &F,
+                                     FunctionAnalysisManager &AM) {
   // Get alias analysis results from the BasicAA and Steensgard's AA
   auto &BasicAAResult = AM.getResult<BasicAA>(F);
   auto &SteensAAResult = AM.getResult<CFLSteensAA>(F);
@@ -88,35 +79,13 @@ PreservedAnalyses BlindedDataUsagePrinterPass::run(Function &F, FunctionAnalysis
 
   if (!BDU.validateBlindedData(TRS, AAResult)) {
     // Got some violations, now pretty print them since we're a printer pass!
-
-    // TODO: Print out the results
-    // 
-    // Note, for this to work, the BlindedDataUsageAnalysis validateBlindedData
-    // function must first be updated such that it doesn't immediately crash on
-    // failures. There is an initial Violations container for storing results,
-    // but it can be adapted as needed.
-    // 
-    // Output should probably be silent for non-violating functions, and for
-    // others start with saysing something like "Violations found for function"
-    // and then listing violations. 
-    // OS << "TRY!!!\n";
-    // OS << __FUNCTION__ << " isn't done yet!\n";
-    // llvm_unreachable("unimplemented");
-    
     for (auto &V : BDU.violations()) { 
-      // TODO: Print them out
-      // 
-      
       Instruction &Inst = *(V.first);
       Inst.getDebugLoc().print(OS);
       OS << "\n";
       OS << "description: " << V.second << "\n\n";
-      // OS << Inst << "\n";
-      // Each entry should contain some location indicator (if available, based
-      // on a DebugLoc that points to the original source file) and an
-      // explanation of why this is a violation. The explanation can be
-      // essentially just the original string from the asserts.
-    } }
+    }
+  }
     
   // Tell the pass manager we don't invalidate any of the used analyses
   PreservedAnalyses PA;
