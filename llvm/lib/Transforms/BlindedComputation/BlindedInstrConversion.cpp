@@ -7,6 +7,8 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/ValueMap.h"
+#include <llvm/IR/DebugLoc.h>
+#include <llvm/IR/DebugInfoMetadata.h>
 #include "llvm/Analysis/TaintTracking.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/BlindedDataUsage.h"
@@ -317,7 +319,10 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
             break;
           }
         } else {
+          // const llvm::DebugLoc &debugInfo = Inst.getDebugLoc();
           dbgs() << "Skipping indirect function call.\n";
+          // dbgs() << "\t" << debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << "\n";
+          // Inst.dump();
         }
       } // if (Callbase...
     } // for (inst_iterator...
@@ -439,7 +444,7 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
 
   // Verify our blinded data usage policies
   if(!BDU.validateBlindedData(TR, AA)){
-      for (auto &V : BDU.violations()) { 
+      for (auto &V : BDU.violations()) {
         const llvm::DebugLoc &debugInfo = V.first->getDebugLoc();
         errs() << debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
         errs() << V.second.str().c_str() << "\n";

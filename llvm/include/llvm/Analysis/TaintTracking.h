@@ -26,7 +26,7 @@ namespace llvm {
 
 class TaintedRegisters {
 public:
-  using ConstValueSet = SmallPtrSet<const Value *, 4>;
+  using ConstValueSet = SmallPtrSet<Value *, 4>;
 
   /// Construct an empty TaintedRegisters object.
   TaintedRegisters(Function &F) : F(F) {}
@@ -39,7 +39,7 @@ public:
 
   /// Explicitly marks value as tainted and propagates taint
   /// This marking is maintained even after `releaseMemory()` is called
-  void explicitlyTaint(const Value *Value);
+  void explicitlyTaint(Value *Value);
 
   /// Free the memory used by this class.
   void releaseMemory();
@@ -58,7 +58,7 @@ private:
   ConstValueSet TaintedRegisterSet;
 
   /// Assumes input is tainted and propagates taint to other values
-  void propagateTaintedRegisters(const Value *TaintedArg,
+  void propagateTaintedRegisters(Value *TaintedArg,
                                  AliasSetTracker *AST);
 
   std::unique_ptr<AliasSetTracker> buildAliasSetTracker(AAResults *AA);

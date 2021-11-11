@@ -35,7 +35,7 @@ TaintedRegisters::buildAliasSetTracker(AAResults *AA) {
   return AST;
 }
 
-void TaintedRegisters::explicitlyTaint(const Value *Value) {
+void TaintedRegisters::explicitlyTaint(Value *Value) {
   ExplicitlyMarkedTainted.insert(Value);
   propagateTaintedRegisters(Value, AST.get());
 }
@@ -61,7 +61,7 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
       }
     }
 
-    for (const Value *Val : ExplicitlyMarkedTainted) {
+    for (Value *Val : ExplicitlyMarkedTainted) {
       propagateTaintedRegisters(Val, AST.get());
     }
   }
@@ -135,20 +135,30 @@ static bool isMultiplicationByZero(const BinaryOperator *BinOp) {
   return false;
 }
 
-void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
+void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
                                                  AliasSetTracker *AST) {
-  SmallVector<const Value *, 64> Worklist;
+  SmallVector<Value *, 64> Worklist;
   Worklist.push_back(TaintedArg);
 
   while (!Worklist.empty()) {
-    const Value *CurrentVal = Worklist.pop_back_val();
+    Value *CurrentVal = Worklist.pop_back_val();
 
     if (TaintedRegisterSet.contains(CurrentVal))
       continue;
 
     TaintedRegisterSet.insert(CurrentVal);
 
-    for (const User *U : CurrentVal->users()) {
+    if (Instruction *currentInst = dyn_cast<Instruction>(CurrentVal)) {
+      LLVMContext &cont = currentInst->getContext();
+      MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedTag"));
+      currentInst->setMetadata("my.md.blindedMD", N);
+    }
+
+    if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(UInst)) {
+      // TODO: Should we *really* blind the operand(s) of a blinded GEP??? (It's not really right - proper alias analysis would be better)
+    }
+
+    for (User *U : CurrentVal->users()) {
 
       // We can define more fine tuned propagation rules here
       // We can cast to specific instruction subclasses and handle
@@ -158,28 +168,48 @@ void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
         if (isMultiplicationByZero(BinOp)) continue;
       }
 
-      if (const Instruction *UInst = dyn_cast<Instruction>(U)) {
-        if (UInst->getFunction() != &F) continue;
+      if (Instruction *UInst = dyn_cast<Instruction>(U)) {
+        if (UInst->getFunction() != &F) {
+          // dbgs() << "\n---outsideFunc---\n";
+          // dbgs() << "Function: " << F.getName() << "\n";
+          // dbgs() << "CurrentVal: ";
+          // CurrentVal->dump();
+          // dbgs() << "External user: ";
+          // UInst->dump();
+          continue; // TODO FIXME Should we really ignore these??
+        }
 
         if (const StoreInst *SI = dyn_cast<StoreInst>(UInst)) {
           const Value *PO = SI->getPointerOperand();
           // if the pointer was allocated on the stack or is a global, then we can handle it
-          if (isa<AllocaInst>(PO)) {
-            // FIXME: Does not handle all cases!
-            // For example, the Use might be a GEP based on the source Alloca!
+          // if (isa<AllocaInst>(PO)) {
+          //   // FIXME: Does not handle all cases!
+          //   // For example, the Use might be a GEP based on the source Alloca!
+            
+          // } else
+          if (const auto *GV = dyn_cast<GlobalVariable>(PO)) {
+            if (!GV->hasAttribute(Attribute::Blinded))
+              assert(false && "Invalid storage of blinded data in non-blinded memory!");
+          } else {
             auto &AS = AST->getAliasSetFor(MemoryLocation::get(SI));
+            // dbgs() << "\n---AliasSet---\n";
+            // dbgs() << "Function: " << F.getName() << "\n";
+            // dbgs() << "CurrentVal: ";
+            // CurrentVal->dump();
+            // dbgs() << "StoreInst: ";
+            // SI->dump();
+            // dbgs() << "Alias Set size = " << AS.size() << "\n";
             for (AliasSet::iterator ASI = AS.begin(), E = AS.end(); ASI != E; ++ASI) {
+              // dbgs() << "\t" << ASI.getPointer()->getName() << "\n";
               if (!TaintedRegisterSet.contains(ASI.getPointer())) {
                 Worklist.push_back(ASI.getPointer());
               }
             }
-          } else if (const auto *GV = dyn_cast<GlobalVariable>(PO)) {
-            if (!GV->hasAttribute(Attribute::Blinded))
-              assert(false && "Invalid storage of blinded data in non-blinded memory!");
           }
         } else if (const CallBase *CB = dyn_cast<CallBase>(UInst)) {
           if (Function *CF = CB->getCalledFunction()) {
-            if (CF->hasFnAttribute(Attribute::Blinded)) Worklist.push_back(UInst);
+            if (CF->hasFnAttribute(Attribute::Blinded))
+              Worklist.push_back(UInst);
           } else {
             // assume return value from indirect function call is tainted
             Worklist.push_back(UInst);
@@ -187,7 +217,7 @@ void TaintedRegisters::propagateTaintedRegisters(const Value *TaintedArg,
         } else {
           Worklist.push_back(UInst);
         }
-      } else if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {
+      } else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {
         Worklist.push_back(GV);
       }
     }
