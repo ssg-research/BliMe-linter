@@ -12,6 +12,8 @@
 #include "llvm/Analysis/BlindedDataUsage.h"
 #include "llvm/Analysis/CFLSteensAliasAnalysis.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include <llvm/IR/DebugLoc.h>
+#include <llvm/IR/DebugInfoMetadata.h>
 
 using namespace llvm;
 
@@ -429,7 +431,6 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
   VisitedFunctions.insert(&F);
 
   bool MadeChange = false;
-
   MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
   propagateBlindedArgumentFunctionCalls(F, AA, TR, AM, VisitedFunctions);
   MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
@@ -439,9 +440,12 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
   // Verify our blinded data usage policies
   if(!BDU.validateBlindedData(TR, AA)){
       for (auto &V : BDU.violations()) { 
+        const llvm::DebugLoc &debugInfo = V.first->getDebugLoc();
+        errs() << debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
         errs() << V.second.str().c_str() << "\n";
-    }
-    llvm_unreachable("validateBlindedData returns 'false'");
+      }
+
+//    llvm_unreachable("validateBlindedData returns 'false'");
   }
 
   VisitedFunctions.erase(&F);
