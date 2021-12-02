@@ -35,8 +35,8 @@ public:
   ///
   /// This returns the cached value if taint analysis has previously 
   /// been completed, otherwise it processes it first.
-  const ConstValueSet &getTaintedRegisters(AAResults *AA);
-
+  const ConstValueSet &getTaintedRegisters(AAResults *AA, int mode=0);
+  
   /// Explicitly marks value as tainted and propagates taint
   /// This marking is maintained even after `releaseMemory()` is called
   void explicitlyTaint(Value *Value);
@@ -56,6 +56,7 @@ private:
   ConstValueSet ExplicitlyMarkedTainted;
 
   ConstValueSet TaintedRegisterSet;
+  ConstValueSet BlindedDataSet;
 
   /// Assumes input is tainted and propagates taint to other values
   void propagateTaintedRegisters(Value *TaintedArg,

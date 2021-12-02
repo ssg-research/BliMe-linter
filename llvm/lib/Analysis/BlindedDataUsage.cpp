@@ -24,31 +24,51 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
     // we're fine if no violations have been found
     return Violations.empty();
 
-  auto &TRSet = TR.getTaintedRegisters(&AA);
+  auto &TRSet = TR.getTaintedRegisters(&AA, 1);
 
   for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
     Instruction &Inst = *I;
 
-    // we are only interested in blinded instructions
-    if (!TRSet.contains(&Inst)) {
-      continue;
-    }
+    if (BranchInst *BInst = dyn_cast<BranchInst>(&Inst)) {
 
-    if (isa<BranchInst>(&Inst)) {
-      std::pair<Instruction *, StringRef> Violation_Instance(
-          &Inst, "Invalid use of blinded data as operand of BranchInst!");
-      Violations.insert(Violation_Instance);
-    }
-
-    if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&Inst)) {
-      for (auto Idx = GEP->idx_begin(); Idx != GEP->idx_end(); ++Idx) {
-        if (TRSet.contains(*Idx)) {
-          std::pair<Instruction *, StringRef> Violation_Instance(
-              &Inst, StringRef("Invalid use of blinded data as index of "
-                               "varying-size array!"));
-          Violations.insert(Violation_Instance);
-        }
+      if (BInst->isConditional() && TRSet.contains(BInst->getCondition())){
+        std::pair<Instruction *, StringRef> Violation_Instance(
+            &Inst, "Invalid use of blinded data as operand of BranchInst!");
+        Violations.insert(Violation_Instance);
       }
+    }
+
+    if (LoadInst *LInst = dyn_cast<LoadInst>(&Inst)){
+      Value * LAddr = LInst->getPointerOperand();
+      if (TRSet.contains(LAddr)){ 
+//        std::pair<Instruction *, StringRef> Violation_Instance(
+//          &Inst, LAddr->getValueName());
+        Inst.print(errs());
+        errs() << StringRef(LAddr->getName().str()) << "\n";
+        std::pair<Instruction *, StringRef> Violation_Instance(
+          &Inst, StringRef("LoadInst with a blinded pointer."));
+        Violations.insert(Violation_Instance);           
+
+      }
+    }
+    
+    if (StoreInst *SInst = dyn_cast<StoreInst>(&Inst)){   
+      Value * SAddr = SInst->getPointerOperand();
+
+      if (isa<GlobalVariable>(SAddr)){
+        errs() << "Global Variable...";
+        continue;
+      }
+      if (TRSet.contains(SAddr)){ 
+//        std::pair<Instruction *, StringRef> Violation_Instance(
+//          &Inst, SAddr->getValueName());
+//        errs() << StringRef(SAddr->getName().str()) << "\n";
+        Inst.print(errs());
+        std::pair<Instruction *, StringRef> Violation_Instance(
+          &Inst, StringRef("StoreInst with a blinded pointer."));
+        Violations.insert(Violation_Instance);           
+
+      }    
     }
   }
   

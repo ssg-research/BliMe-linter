@@ -41,7 +41,7 @@ void TaintedRegisters::explicitlyTaint(Value *Value) {
 }
 
 const TaintedRegisters::ConstValueSet &
-TaintedRegisters::getTaintedRegisters(AAResults *AA) {
+TaintedRegisters::getTaintedRegisters(AAResults *AA, int mode) {
   if (TaintedRegisterSet.empty()) {
     AST = buildAliasSetTracker(AA);
     // AST->dump();
@@ -65,7 +65,12 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
       propagateTaintedRegisters(Val, AST.get());
     }
   }
-  return TaintedRegisterSet;
+  if (mode == 0) {
+    return TaintedRegisterSet;
+  }
+  else {
+    return BlindedDataSet;
+  }
 }
 
 void TaintedRegisters::releaseMemory() {
@@ -138,6 +143,7 @@ static bool isMultiplicationByZero(const BinaryOperator *BinOp) {
 void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
                                                  AliasSetTracker *AST) {
   SmallVector<Value *, 64> Worklist;
+
   Worklist.push_back(TaintedArg);
 
   while (!Worklist.empty()) {
@@ -145,19 +151,23 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
 
     if (TaintedRegisterSet.contains(CurrentVal))
       continue;
-
+    
+    // insert current blinded arg
     TaintedRegisterSet.insert(CurrentVal);
 
+    // is it a instruction?
+    // Oops, it only deals with some debug issues, ignore it for now
     if (Instruction *currentInst = dyn_cast<Instruction>(CurrentVal)) {
       LLVMContext &cont = currentInst->getContext();
       MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedTag"));
       currentInst->setMetadata("my.md.blindedMD", N);
     }
 
-    if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(UInst)) {
+//    if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(UInst)) {
       // TODO: Should we *really* blind the operand(s) of a blinded GEP??? (It's not really right - proper alias analysis would be better)
-    }
+//    }
 
+    // Check all the users
     for (User *U : CurrentVal->users()) {
 
       // We can define more fine tuned propagation rules here
@@ -203,6 +213,9 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
               // dbgs() << "\t" << ASI.getPointer()->getName() << "\n";
               if (!TaintedRegisterSet.contains(ASI.getPointer())) {
                 Worklist.push_back(ASI.getPointer());
+                if (BlindedDataSet.contains(CurrentVal) && !BlindedDataSet.contains(UInst)){
+                  BlindedDataSet.insert(UInst);
+                }
               }
             }
           }
@@ -210,11 +223,18 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
           if (Function *CF = CB->getCalledFunction()) {
             if (CF->hasFnAttribute(Attribute::Blinded))
               Worklist.push_back(UInst);
+
           } else {
             // assume return value from indirect function call is tainted
             Worklist.push_back(UInst);
           }
+        } else if (const LoadInst *LI = dyn_cast<LoadInst>(UInst)){
+          Worklist.push_back(UInst);
+          BlindedDataSet.insert(UInst);
         } else {
+          if (BlindedDataSet.contains(CurrentVal) && !BlindedDataSet.contains(UInst)){
+            BlindedDataSet.insert(UInst);
+          }
           Worklist.push_back(UInst);
         }
       } else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {

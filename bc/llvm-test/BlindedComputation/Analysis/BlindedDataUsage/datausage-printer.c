@@ -20,3 +20,8 @@ void do_conditional(__attribute__((blinded)) int cond) {
 int do_load(int *arr, __attribute__((blinded)) size_t idx) {
   return arr[idx];
 }
+
+void do_store(int *arr, __attribute__((blinded)) size_t idx) {
+  int *testptr = &arr[idx];
+  *testptr = 10;
+}
