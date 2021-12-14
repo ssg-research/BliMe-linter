@@ -37,19 +37,26 @@ TaintedRegisters::buildAliasSetTracker(AAResults *AA) {
 
 void TaintedRegisters::explicitlyTaint(Value *Value) {
   ExplicitlyMarkedTainted.insert(Value);
-  propagateTaintedRegisters(Value, AST.get());
+  propagateTaintedRegisters(Value, AST.get(), true);
 }
 
 const TaintedRegisters::ConstValueSet &
-TaintedRegisters::getTaintedRegisters(AAResults *AA, int mode) {
+TaintedRegisters::getTaintedRegisters(AAResults *AA) {
   if (TaintedRegisterSet.empty()) {
     AST = buildAliasSetTracker(AA);
     // AST->dump();
 
    // int useKey(__attribute__((blinded)) int idx) {
+     // TODO: type of argument. If it's a ptr to blinded data...
+     // Maybe add a mode for propagateTaintedRegisters
     for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
       if (Arg->hasAttribute(Attribute::Blinded)) {
-        propagateTaintedRegisters(Arg, AST.get());
+        if (Arg->getType()->isPointerTy()){
+          propagateTaintedRegisters(Arg, AST.get(), false);
+        }
+        else {
+          propagateTaintedRegisters(Arg, AST.get(), true);
+        }
       }
     }
 
@@ -57,20 +64,15 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA, int mode) {
       Module::GlobalListType &GL = M->getGlobalList();
       for (auto I = GL.begin(), E = GL.end(); I != E; ++I) {
         GlobalVariable &GV = *I;
-        if (GV.hasAttribute(Attribute::Blinded)) propagateTaintedRegisters(&GV, AST.get());
+        propagateTaintedRegisters(&GV, AST.get(), false);
       }
     }
 
     for (Value *Val : ExplicitlyMarkedTainted) {
-      propagateTaintedRegisters(Val, AST.get());
+      propagateTaintedRegisters(Val, AST.get(), true);
     }
   }
-  if (mode == 0) {
-    return TaintedRegisterSet;
-  }
-  else {
-    return BlindedDataSet;
-  }
+  return TaintedRegisterSet;
 }
 
 void TaintedRegisters::releaseMemory() {
@@ -141,22 +143,32 @@ static bool isMultiplicationByZero(const BinaryOperator *BinOp) {
 }
 
 void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
-                                                 AliasSetTracker *AST) {
-  SmallVector<Value *, 64> Worklist;
+                                                 AliasSetTracker *AST, bool mode) {
+  SmallVector<std::pair<Value *, bool>, 64> Worklist;
 
-  Worklist.push_back(TaintedArg);
+  Worklist.push_back(std::pair<Value*, bool>(TaintedArg, mode));
 
   while (!Worklist.empty()) {
-    Value *CurrentVal = Worklist.pop_back_val();
+    std::pair<Value*, bool> CurrentPair = Worklist.pop_back_val();
+    Value *CurrentVal = CurrentPair.first;
+    bool isBlindedData = CurrentPair.second;
 
-    if (TaintedRegisterSet.contains(CurrentVal))
-      continue;
+    if (isBlindedData){
+      if (TaintedRegisterSet.contains(CurrentVal))
+        continue;
+      else
+        TaintedRegisterSet.insert(CurrentVal);
+    }
+    else{
+      if (PtrBlindedSet.contains(CurrentVal))
+        continue;
+      else
+        PtrBlindedSet.insert(CurrentVal);
+    }
     
     // insert current blinded arg
-    TaintedRegisterSet.insert(CurrentVal);
+    // TaintedRegisterSet.insert(CurrentVal);
 
-    // is it a instruction?
-    // Oops, it only deals with some debug issues, ignore it for now
     if (Instruction *currentInst = dyn_cast<Instruction>(CurrentVal)) {
       LLVMContext &cont = currentInst->getContext();
       MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedTag"));
@@ -191,6 +203,8 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
 
         if (const StoreInst *SI = dyn_cast<StoreInst>(UInst)) {
           const Value *PO = SI->getPointerOperand();
+          if (!TaintedRegisterSet.contains(CurrentVal))
+            continue;
           // if the pointer was allocated on the stack or is a global, then we can handle it
           // if (isa<AllocaInst>(PO)) {
           //   // FIXME: Does not handle all cases!
@@ -202,47 +216,55 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
               assert(false && "Invalid storage of blinded data in non-blinded memory!");
           } else {
             auto &AS = AST->getAliasSetFor(MemoryLocation::get(SI));
-            // dbgs() << "\n---AliasSet---\n";
-            // dbgs() << "Function: " << F.getName() << "\n";
-            // dbgs() << "CurrentVal: ";
-            // CurrentVal->dump();
-            // dbgs() << "StoreInst: ";
-            // SI->dump();
-            // dbgs() << "Alias Set size = " << AS.size() << "\n";
             for (AliasSet::iterator ASI = AS.begin(), E = AS.end(); ASI != E; ++ASI) {
               // dbgs() << "\t" << ASI.getPointer()->getName() << "\n";
-              if (!TaintedRegisterSet.contains(ASI.getPointer())) {
-                Worklist.push_back(ASI.getPointer());
-                if (BlindedDataSet.contains(CurrentVal) && !BlindedDataSet.contains(UInst)){
-                  BlindedDataSet.insert(UInst);
-                }
+              if (!PtrBlindedSet.contains(ASI.getPointer())) {
+                Worklist.push_back(std::pair<Value*, bool>(ASI.getPointer(), 0));
               }
             }
           }
         } else if (const CallBase *CB = dyn_cast<CallBase>(UInst)) {
           if (Function *CF = CB->getCalledFunction()) {
             if (CF->hasFnAttribute(Attribute::Blinded))
-              Worklist.push_back(UInst);
-
+              Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
           } else {
             // assume return value from indirect function call is tainted
-            Worklist.push_back(UInst);
+              Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
           }
         } else if (const LoadInst *LI = dyn_cast<LoadInst>(UInst)){
-          Worklist.push_back(UInst);
-          BlindedDataSet.insert(UInst);
-        } else {
-          if (BlindedDataSet.contains(CurrentVal) && !BlindedDataSet.contains(UInst)){
-            BlindedDataSet.insert(UInst);
+          const Value *PO = LI->getPointerOperand();
+          if (PtrBlindedSet.contains(PO)){
+            Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
           }
-          Worklist.push_back(UInst);
+        } else {
+          if (TaintedRegisterSet.contains(CurrentVal)) {
+            Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
+          }
+          else if (PtrBlindedSet.contains(CurrentVal)){
+            Worklist.push_back(std::pair<Value*, bool>(UInst, 0));
+          }
         }
       } else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {
-        Worklist.push_back(GV);
+        U->print(errs());
+        errs() << "try to print tainted GV...\n";
+        Worklist.push_back(std::pair<Value*, bool>(GV, 0));
       }
     }
   }
 }
+
+// void TaintedRegisters::propagateTaintedRegistersPtr(Value *TaintedArg,
+//                                                  AliasSetTracker *AST) {
+//   for (User *U : TaintedArg->users()){
+//     if (Instruction *UInst = dyn_cast<Instruction>(U)){
+//       if (const LoadInst *LI = dyn_cast<LoadInst>(UInst)){
+//         UInst->print(errs());
+//         propagateTaintedRegisters(UInst, AST);
+//         break;
+//       }
+//     }
+//   }                                           
+// }
 
 AnalysisKey TaintTrackingAnalysis::Key;
 TaintedRegisters TaintTrackingAnalysis::run(Function &F,

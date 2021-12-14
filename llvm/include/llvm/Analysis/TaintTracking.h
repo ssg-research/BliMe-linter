@@ -35,7 +35,7 @@ public:
   ///
   /// This returns the cached value if taint analysis has previously 
   /// been completed, otherwise it processes it first.
-  const ConstValueSet &getTaintedRegisters(AAResults *AA, int mode=0);
+  const ConstValueSet &getTaintedRegisters(AAResults *AA);
   
   /// Explicitly marks value as tainted and propagates taint
   /// This marking is maintained even after `releaseMemory()` is called
@@ -56,11 +56,13 @@ private:
   ConstValueSet ExplicitlyMarkedTainted;
 
   ConstValueSet TaintedRegisterSet;
-  ConstValueSet BlindedDataSet;
+  ConstValueSet PtrBlindedSet;
 
   /// Assumes input is tainted and propagates taint to other values
   void propagateTaintedRegisters(Value *TaintedArg,
-                                 AliasSetTracker *AST);
+                                 AliasSetTracker *AST, bool mode);
+  void propagateTaintedRegistersPtr(Value *TaintedArg,
+                                    AliasSetTracker *AST);           
 
   std::unique_ptr<AliasSetTracker> buildAliasSetTracker(AAResults *AA);
 };
