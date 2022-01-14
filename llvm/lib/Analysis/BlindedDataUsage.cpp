@@ -24,7 +24,7 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
     // we're fine if no violations have been found
     return Violations.empty();
 
-  auto &TRSet = TR.getTaintedRegisters(&AA, 1);
+  auto &TRSet = TR.getTaintedRegisters(&AA);
 
   for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
     Instruction &Inst = *I;
@@ -43,8 +43,8 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
       if (TRSet.contains(LAddr)){ 
 //        std::pair<Instruction *, StringRef> Violation_Instance(
 //          &Inst, LAddr->getValueName());
-        Inst.print(errs());
-        errs() << StringRef(LAddr->getName().str()) << "\n";
+//        Inst.print(errs());
+//        errs() << StringRef(LAddr->getName().str()) << "\n";
         std::pair<Instruction *, StringRef> Violation_Instance(
           &Inst, StringRef("LoadInst with a blinded pointer."));
         Violations.insert(Violation_Instance);           
@@ -102,6 +102,7 @@ PreservedAnalyses BlindedDataUsagePrinterPass::run(Function &F,
     for (auto &V : BDU.violations()) { 
       Instruction &Inst = *(V.first);
       Inst.getDebugLoc().print(OS);
+      Inst.print(OS);
       OS << "\n";
       OS << "description: " << V.second << "\n\n";
     }

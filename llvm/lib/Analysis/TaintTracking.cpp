@@ -241,7 +241,9 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
             Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
           }
           else if (PtrBlindedSet.contains(CurrentVal)){
-            Worklist.push_back(std::pair<Value*, bool>(UInst, 0));
+            if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(UInst)) {
+              Worklist.push_back(std::pair<Value*, bool>(UInst, 0));
+            }
           }
         }
       } else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {
@@ -252,19 +254,6 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
     }
   }
 }
-
-// void TaintedRegisters::propagateTaintedRegistersPtr(Value *TaintedArg,
-//                                                  AliasSetTracker *AST) {
-//   for (User *U : TaintedArg->users()){
-//     if (Instruction *UInst = dyn_cast<Instruction>(U)){
-//       if (const LoadInst *LI = dyn_cast<LoadInst>(UInst)){
-//         UInst->print(errs());
-//         propagateTaintedRegisters(UInst, AST);
-//         break;
-//       }
-//     }
-//   }                                           
-// }
 
 AnalysisKey TaintTrackingAnalysis::Key;
 TaintedRegisters TaintTrackingAnalysis::run(Function &F,
