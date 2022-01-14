@@ -29,7 +29,7 @@ int transform(int idx, int scale, int offset) {
 // CHECK-LABEL: @test
 // CHECK: call {{.*}} @transform.{{[a-z0-9]+}}(
 // CHECK: call {{.*}} @zero.{{[a-z0-9]+}}(
-// CHECK: call {{.*}} @sink.1(
+// CHECK: call {{.*}} @sink(
 // CHECK: call {{.*}} @transform.{{[a-z0-9]+}}(
 // CHECK: call {{.*}} @sink.{{[a-z0-9]+}}(
 // CHECK: ret i32 57687
