@@ -1,5 +1,5 @@
 // RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
-#include <stdint.h>
+// #include <stdint.h>
 
 // CHECK-LABEL: @simpleTest
 // CHECK-NOT: select

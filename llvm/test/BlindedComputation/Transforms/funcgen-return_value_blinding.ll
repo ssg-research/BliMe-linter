@@ -36,7 +36,7 @@
 ; CHECK-LABEL: @test
 ; CHECK: call {{.*}} @transform.{{[a-z0-9]+}}(
 ; CHECK: call {{.*}} @zero.{{[a-z0-9]+}}(
-; CHECK: call {{.*}} @sink(
+; CHECK: call {{.*}} @sink.1(
 ; CHECK: call {{.*}} @transform.{{[a-z0-9]+}}(
 ; CHECK: call {{.*}} @sink.{{[a-z0-9]+}}(
 ; CHECK: ret i32 57687
@@ -133,7 +133,7 @@ attributes #4 = { nounwind }
 !0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
 !1 = distinct !DIGlobalVariable(name: "g_var", scope: !2, file: !3, line: 7, type: !9, isLocal: false, isDefinition: true)
 !2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 11.0", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5, splitDebugInlining: false, nameTableKind: None)
-!3 = !DIFile(filename: "BlindedComputation/Transforms/funcgen-return_value_blinding.c", directory: "/home/ishkamiel/d/llvm/bc/llvm-test")
+!3 = !DIFile(filename: "BlindedComputation/Transforms/funcgen-return_value_blinding.c", directory: "/home/hester/Desktop/bc-llvm/bc/llvm-test")
 !4 = !{}
 !5 = !{!0, !6}
 !6 = !DIGlobalVariableExpression(var: !7, expr: !DIExpression())
