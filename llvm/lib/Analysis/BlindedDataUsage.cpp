@@ -55,10 +55,6 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
     if (StoreInst *SInst = dyn_cast<StoreInst>(&Inst)){   
       Value * SAddr = SInst->getPointerOperand();
 
-      if (isa<GlobalVariable>(SAddr)){
-        errs() << "Global Variable...";
-        continue;
-      }
       if (TRSet.contains(SAddr)){ 
 //        std::pair<Instruction *, StringRef> Violation_Instance(
 //          &Inst, SAddr->getValueName());
@@ -100,6 +96,7 @@ PreservedAnalyses BlindedDataUsagePrinterPass::run(Function &F,
   if (!BDU.validateBlindedData(TRS, AAResult)) {
     // Got some violations, now pretty print them since we're a printer pass!
     for (auto &V : BDU.violations()) { 
+      if (V.first == nullptr){OS << V.second << "\n\n"; continue; }
       Instruction &Inst = *(V.first);
       Inst.getDebugLoc().print(OS);
       Inst.print(OS);
