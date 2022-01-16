@@ -15,6 +15,7 @@ CC = $(BUILD_DIR)/bin/clang
 
 INSTALL_DIR ?= $(LLVM_DIR)/test/
 CFLAGS ?= --target=x86_64 
+CFLAGS += -I/usr/include/x86_64-linux-gnu
 CFLAGS += -Wall -O2
 CFLAGS += -Xclang -disable-lifetime-markers 
 CFLAGS += -fno-discard-value-names 
