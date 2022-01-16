@@ -46,7 +46,11 @@ install: $(INSTALL_FILES)
 
 $(INSTALL_FILES): $(INSTALL_DIR)% : %
 	@mkdir -p $(dir $(INSTALL_DIR)$<)
-	cp $< $(INSTALL_DIR)$<
+	@echo $< | \
+		sed 's/.ll$$/.c/' | \
+		xargs git diff --exit-code $$(git log -1 --pretty=format:"%h" -- $(INSTALL_DIR)$<) --pretty=format:"%h" -- > /dev/null && \
+		 echo "no change, skipping $(INSTALL_DIR)$<" || \
+		(echo "installing $(INSTALL_DIR)$<" && cp $< $(INSTALL_DIR)$<)
 
 .PHONY: clean
 clean:
