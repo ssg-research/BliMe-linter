@@ -445,6 +445,7 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
   // Verify our blinded data usage policies
   if(!BDU.validateBlindedData(TR, AA)){
       for (auto &V : BDU.violations()) {
+        V.first->print(errs());
         //const llvm::DebugLoc &debugInfo = V.first->getDebugLoc();
         //errs() << debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
         errs() << V.second.str().c_str() << "\n";

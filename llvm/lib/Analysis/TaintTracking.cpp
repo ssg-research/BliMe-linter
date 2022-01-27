@@ -47,8 +47,7 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
     // AST->dump();
 
    // int useKey(__attribute__((blinded)) int idx) {
-     // TODO: type of argument. If it's a ptr to blinded data...
-     // Maybe add a mode for propagateTaintedRegisters
+    errs() << F.getName() << "begins\n"; 
     for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
       if (Arg->hasAttribute(Attribute::Blinded)) {
         if (Arg->getType()->isPointerTy()){
@@ -59,18 +58,26 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
         }
       }
     }
+    errs() << "analysis on args ends\n";
 
     if (Module *M = F.getParent()) {
+      errs() << "analysis on GV \n";
       Module::GlobalListType &GL = M->getGlobalList();
       for (auto I = GL.begin(), E = GL.end(); I != E; ++I) {
         GlobalVariable &GV = *I;
-        propagateTaintedRegisters(&GV, AST.get(), false);
+        if (GV.hasAttribute(Attribute::Blinded)){
+          propagateTaintedRegisters(&GV, AST.get(), false);
+        }
       }
     }
 
+    errs() << "analysis on GV ends\n";
     for (Value *Val : ExplicitlyMarkedTainted) {
+      errs() << "analysis on Explicit\n";
+      errs() << Val->getName();
       propagateTaintedRegisters(Val, AST.get(), true);
     }
+    errs() << "end of analysis...\n\n";
   }
   return TaintedRegisterSet;
 }
@@ -170,9 +177,17 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
     // TaintedRegisterSet.insert(CurrentVal);
 
     if (Instruction *currentInst = dyn_cast<Instruction>(CurrentVal)) {
-      LLVMContext &cont = currentInst->getContext();
-      MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedTag"));
-      currentInst->setMetadata("my.md.blindedMD", N);
+      if (TaintedRegisterSet.contains(CurrentVal)){
+        LLVMContext &cont = currentInst->getContext();
+        MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedTag"));
+        currentInst->setMetadata("my.md.blindedMD", N);
+      }
+      else{
+        LLVMContext &cont = currentInst->getContext();
+        MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedPtrTag"));
+        currentInst->setMetadata("my.md.blindedPtr", N);
+      }
+
     }
 
 //    if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(UInst)) {
@@ -246,11 +261,18 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
             }
           }
         }
-      } else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {
-        U->print(errs());
-        errs() << "try to print tainted GV...\n";
-        Worklist.push_back(std::pair<Value*, bool>(GV, 0));
-      }
+      } 
+      // else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {
+      //   U->print(errs());
+      //   if(GV->getType()->isPointerTy() && GV->getType()->getContainedType(0)->isPointerTy()){
+      //     errs() << "not in worklist!\n";
+      //     continue;
+      //   }
+
+      //   errs() << "\n";
+      //   errs() << "try to print tainted GV...\n";
+      //   Worklist.push_back(std::pair<Value*, bool>(GV, 0));
+      // }
     }
   }
 }
