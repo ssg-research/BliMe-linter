@@ -1200,8 +1200,6 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
     bool IsThinLTO = CodeGenOpts.PrepareForThinLTO;
     bool IsLTO = CodeGenOpts.PrepareForLTO;
 
-    MPM.addPass(BlindedInstrConversionPass());
-
     if (CodeGenOpts.OptimizationLevel == 0) {
       // If we reached here with a non-empty index file name, then the index
       // file was empty and we are not performing ThinLTO backend compilation
@@ -1378,6 +1376,8 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
       addCoroutinePassesAtO0(MPM, LangOpts, CodeGenOpts);
       addSanitizersAtO0(MPM, TargetTriple, LangOpts, CodeGenOpts);
     }
+
+    MPM.addPass(BlindedInstrConversionPass());
   }
 
   // FIXME: We still use the legacy pass manager to do code generation. We
