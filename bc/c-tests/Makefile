@@ -61,7 +61,7 @@ $(LL_FILES_OPT): %.opt.ll : %.p.ll
 	$(OPT) -passes="blinded-instr-conv" -S < $<  > $@
 
 $(OPT_OUT_FILES): % : %.ll
-	$(CC) $< -o $@
+	$(CC) $(CFLAGS) $< -o $@
 
 .PHONY: clean
 clean:
