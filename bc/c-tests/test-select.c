@@ -1,27 +1,30 @@
+#include "common.h"
 #include <stdio.h>
+#include <stdlib.h>
+
 
 int g_cond = 12;
 
 int get_value1() { return g_cond; }
 int get_value2() { return g_cond + 3; }
 
-__attribute__((noinline))
-int simpleTest1(__attribute__((blinded)) int cond, int a, int b) {
+__noinline
+int simpleTest1(__blinded int cond, int a, int b) {
   return cond > 11 ? a : b;
 }
 
-__attribute__((noinline))
-int simpleTest2(__attribute__((blinded)) int cond, int a) {
+__noinline
+int simpleTest2(__blinded int cond, int a) {
   return cond > g_cond ? a : 0;
 }
 
-__attribute__((noinline))
-int simpleTest3(__attribute__((blinded)) int cond, int (*a)(), int (*b)()) {
+__noinline
+int simpleTest3(__blinded int cond, int (*a)(), int (*b)()) {
   int (*func)() = cond > g_cond ? a : b;
   return func();
 }
 
-__attribute__((noinline))
+__noinline
 int simpleTest(int a, int b, int c) {
   printf("%d", simpleTest1(a, b, c));
 
@@ -36,6 +39,7 @@ int simpleTest(int a, int b, int c) {
   }
 
   printf("\n");
+  return 0;
 }
 
 int main(int argc, char **argv) {
