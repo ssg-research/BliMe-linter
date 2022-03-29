@@ -47,7 +47,6 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
     // AST->dump();
 
    // int useKey(__attribute__((blinded)) int idx) {
-    errs() << F.getName() << "begins\n"; 
     for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
       if (Arg->hasAttribute(Attribute::Blinded)) {
         if (Arg->getType()->isPointerTy()){
@@ -58,26 +57,21 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
         }
       }
     }
-    errs() << "analysis on args ends\n";
 
     if (Module *M = F.getParent()) {
       errs() << "analysis on GV \n";
       Module::GlobalListType &GL = M->getGlobalList();
       for (auto I = GL.begin(), E = GL.end(); I != E; ++I) {
         GlobalVariable &GV = *I;
-        if (GV.hasAttribute(Attribute::Blinded)){
+        if (GV.hasAttribute(Attribute::Blinded)) {
           propagateTaintedRegisters(&GV, AST.get(), false);
         }
       }
     }
 
-    errs() << "analysis on GV ends\n";
     for (Value *Val : ExplicitlyMarkedTainted) {
-      errs() << "analysis on Explicit\n";
-      errs() << Val->getName();
       propagateTaintedRegisters(Val, AST.get(), true);
     }
-    errs() << "end of analysis...\n\n";
   }
   return TaintedRegisterSet;
 }
