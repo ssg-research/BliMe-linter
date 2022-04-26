@@ -173,8 +173,10 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
     if (Instruction *currentInst = dyn_cast<Instruction>(CurrentVal)) {
       if (TaintedRegisterSet.contains(CurrentVal)){
         LLVMContext &cont = currentInst->getContext();
-        MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedTag"));
-        currentInst->setMetadata("my.md.blindedMD", N);
+        // MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedTag"));
+        // currentInst->setMetadata("my.md.blindedMD", N);
+        MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+        currentInst->setMetadata("t", N);
       }
       else{
         LLVMContext &cont = currentInst->getContext();
