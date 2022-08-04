@@ -32,6 +32,7 @@ endif()
   
 
 add_llvm_component_library(LLVMAnalysis
+  AddTaintMetadata.cpp
   AliasAnalysis.cpp
   AliasAnalysisEvaluator.cpp
   AliasAnalysisSummary.cpp

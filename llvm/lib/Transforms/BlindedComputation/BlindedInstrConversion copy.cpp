@@ -14,30 +14,12 @@
 #include "llvm/Analysis/BlindedDataUsage.h"
 #include "llvm/Analysis/CFLSteensAliasAnalysis.h"
 #include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/Analysis/CallGraph.h"
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <unordered_map>
 
 
 using namespace llvm;
-
-bool BlindedInstrConversionPass::checkAddDependentFunction(Function* Func) {
-  std::vector<Function*> CallingFuncs = DependentFunctions[Func];
-
-  for (auto CallingFunc : CallingFuncs) {
-    if (std::find(FunctionWorkList.begin(), FunctionWorkList.end(), CallingFunc) == FunctionWorkList.end())  {
-      FunctionWorkList.push_back(CallingFunc);
-    }
-  }
-
-  if (CallingFuncs.size() == 0) {
-    return false;
-  }
-  return true;
-
-}
-
 
 static SmallVector<Value *, 4> createGepIndexList(Value *TaintedIdx,
                                                   GetElementPtrInst *GEP,
@@ -288,7 +270,7 @@ bool BlindedInstrConversionPass::propagateBlindedArgumentFunctionCall(
   if (!BlindedFunc) {
     // The function doesn't exist yet, let's create it then!
     BlindedFunc = generateBlindedCopy(NewName, F, ParamNos);
-    run(*BlindedFunc, AM, VisitedFunctions);
+    AM.invalidate(*BlindedFunc, run(*BlindedFunc, AM, VisitedFunctions));
   }
 
   CB.setCalledFunction(BlindedFunc);
@@ -306,14 +288,7 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
   while (true) {
     bool KeepGoing = false;
     const auto *TRSet = &TR.getTaintedRegisters(&AA);
-    if (!TRSet) {
-      llvm_unreachable("null TRset!");
 
-    }
-    for (auto RI : *TRSet) {
-      RI->print(errs());
-      errs() << "\n";
-    }
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       Instruction &Inst = *I;
 
@@ -329,10 +304,6 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
                 !CF->hasParamAttribute(n, Attribute::Blinded)) {
               BlindedParams.push_back(n);
             }
-          }
-          if (std::find(FunctionWorkList.begin(), FunctionWorkList.end(), CF) != FunctionWorkList.end()) {
-            FunctionWorkList.erase(std::find(FunctionWorkList.begin(), FunctionWorkList.end(), CF));
-            AM.invalidate(*CF, run(*CF, AM, VisitedFunctions));
           }
 
           bool IsReturnBlinded = (BlindedParams.empty()
@@ -489,7 +460,7 @@ bool BlindedInstrConversionPass::runImpl(Function &F,
   VisitedFunctions.insert(&F);
 
   bool MadeChange = false;
-  // MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
+  MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
   propagateBlindedArgumentFunctionCalls(F, AA, TR, AM, VisitedFunctions);
   MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
   MadeChange |= markBlindedIfNecessary(F, AA, TR);
@@ -526,22 +497,10 @@ PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
   AAResult.addAAResult(SteensAAResult);
   AAResult.addAAResult(BasicAAResult);
 
-  bool isBlindedBefore = F.hasFnAttribute(Attribute::Blinded);
-
-  if (TR.getTaintedRegisters(&AAResult).size() != TaintTrackingResult[&F]) {
-      TaintTrackingResult[&F] = TR.getTaintedRegisters(&AAResult).size();
-      checkAddDependentFunction(&F);
-  }
-
   if (!runImpl(F, AAResult, TR, BDU, AM, VisitedFunctions)) {
-    if (isBlindedBefore != F.hasFnAttribute(Attribute::Blinded)) {
-      checkAddDependentFunction(&F);
-
-    }
     // No changes, all analyses are preserved.
     return PreservedAnalyses::all();
   }
-
 
   PreservedAnalyses PA;
   PA.preserve<AAManager>();
@@ -560,44 +519,13 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
 
   PreservedAnalyses PA = PreservedAnalyses::all();
 
-  CallGraph CG = CallGraph(M);
-  FunctionWorkList.clear();
-
+  SmallVector<Function *, 8> WorkList;
   for (Function &F : M) {
-    if (F.isDeclaration()) {
-      continue;
-    }
-    FunctionWorkList.push_back(&F);
-    std::vector<Function*> CallingFuncVec;
-    DependentFunctions[&F] = CallingFuncVec;
+    WorkList.push_back(&F);
   }
 
-  for (auto ite = CG.begin(); ite != CG.end(); ite++) {
-    CallGraphNode* CGN = ite->second.get();
-    const Function* CallingFunc = ite->first;
-
-    if (CallingFunc && !CallingFunc->isDeclaration()) {
-
-      // errs() << "analyzing: " << CallingFunc->getName() << "\n";
-      // errs() << CGN->size() << "\n\n";
-      
-      for (unsigned int i = 0; i < CGN->size(); i++) {
-        Function* CurrentCalledFunc = ((*CGN)[i])->getFunction();
-        if (!CurrentCalledFunc)
-          continue;
-        if (CurrentCalledFunc->isDeclaration()) 
-          continue;
-        // errs() << CurrentCalledFunc->getName() << "\n";
-        DependentFunctions[CallingFunc].push_back(CurrentCalledFunc);
-        TaintTrackingResult[CallingFunc] = -1;
-      }
-      // errs() << "\n\n";
-    }
-  }
-
-  while (!FunctionWorkList.empty()) {
-    Function *F = FunctionWorkList.back();
-    FunctionWorkList.pop_back();
+  while (!WorkList.empty()) {
+    Function *F = WorkList.pop_back_val();
 
     if (F->isDeclaration())
       continue;
@@ -619,5 +547,4 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   }
 
   return PA;
-
 }

@@ -30,11 +30,14 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
     Instruction &Inst = *I;
 
     if (BranchInst *BInst = dyn_cast<BranchInst>(&Inst)) {
-
       if (BInst->isConditional() && TRSet.contains(BInst->getCondition())){
+        errs() << "invalid use of blinded data as operand of branchInst!\n";
         std::pair<Instruction *, StringRef> Violation_Instance(
             &Inst, "Invalid use of blinded data as operand of BranchInst!");
         Violations.insert(Violation_Instance);
+        LLVMContext &cont = Inst.getContext();
+        MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+        Inst.setMetadata("t", N);
       }
     }
 
@@ -45,9 +48,13 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
 //          &Inst, LAddr->getValueName());
 //        Inst.print(errs());
 //        errs() << StringRef(LAddr->getName().str()) << "\n";
+        errs() << "loadInstr with a blinded pointer!\n";
         std::pair<Instruction *, StringRef> Violation_Instance(
           &Inst, StringRef("LoadInst with a blinded pointer."));
-        Violations.insert(Violation_Instance);           
+        Violations.insert(Violation_Instance);   
+        LLVMContext &cont = Inst.getContext();
+        MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+        Inst.setMetadata("t", N);        
 
       }
     }
@@ -59,10 +66,14 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
 //        std::pair<Instruction *, StringRef> Violation_Instance(
 //          &Inst, SAddr->getValueName());
 //        errs() << StringRef(SAddr->getName().str()) << "\n";
+        errs() << "storeInstr with a blinded pointer!\n";
         Inst.print(errs());
         std::pair<Instruction *, StringRef> Violation_Instance(
           &Inst, StringRef("StoreInst with a blinded pointer."));
-        Violations.insert(Violation_Instance);           
+        Violations.insert(Violation_Instance);   
+        LLVMContext &cont = Inst.getContext();
+        MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+        Inst.setMetadata("t", N);        
 
       }    
     }

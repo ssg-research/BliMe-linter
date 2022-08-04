@@ -6,6 +6,8 @@
 #include "llvm/Analysis/TaintTracking.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/BlindedDataUsage.h"
+#include <vector>
+#include <unordered_map>
 
 namespace llvm {
 
@@ -27,6 +29,8 @@ private:
 
   bool linearizeSelectInstructions(Function &F);
 
+  bool checkAddDependentFunction(Function *F);
+
   bool runImpl(Function &F, AAManager::Result &AA, TaintedRegisters &TR,
                BlindedDataUsage &BDU, FunctionAnalysisManager &AM,
                SmallSet<Function *, 8> &VisitedFunctions);
@@ -42,6 +46,11 @@ private:
     }
     return Result;
   }
+  std::vector<Function*> FunctionWorkList;
+  std::unordered_map<const Function*, std::vector<Function*>> DependentFunctions;
+  std::unordered_map<const Function*, int> TaintTrackingResult;
+
+
 };
 
 } // namespace llvm

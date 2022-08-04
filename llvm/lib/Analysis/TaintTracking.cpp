@@ -59,7 +59,6 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
     }
 
     if (Module *M = F.getParent()) {
-      errs() << "analysis on GV \n";
       Module::GlobalListType &GL = M->getGlobalList();
       for (auto I = GL.begin(), E = GL.end(); I != E; ++I) {
         GlobalVariable &GV = *I;
@@ -176,7 +175,7 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
         // MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedTag"));
         // currentInst->setMetadata("my.md.blindedMD", N);
         MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
-        currentInst->setMetadata("t", N);
+        currentInst->setMetadata("my.md.blinded", N);
       }
       else{
         LLVMContext &cont = currentInst->getContext();
@@ -209,19 +208,24 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
           // CurrentVal->dump();
           // dbgs() << "External user: ";
           // UInst->dump();
+          
           continue; // TODO FIXME Should we really ignore these??
         }
 
         if (const StoreInst *SI = dyn_cast<StoreInst>(UInst)) {
           const Value *PO = SI->getPointerOperand();
-          if (!TaintedRegisterSet.contains(CurrentVal))
+          if (!TaintedRegisterSet.contains(CurrentVal)) {
             continue;
+          }
           // if the pointer was allocated on the stack or is a global, then we can handle it
           // if (isa<AllocaInst>(PO)) {
           //   // FIXME: Does not handle all cases!
           //   // For example, the Use might be a GEP based on the source Alloca!
             
           // } else
+          // if (TaintedRegisterSet.contains(PO)) {
+
+          // }
           if (const auto *GV = dyn_cast<GlobalVariable>(PO)) {
             if (!GV->hasAttribute(Attribute::Blinded))
               assert(false && "Invalid storage of blinded data in non-blinded memory!");
@@ -244,8 +248,21 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
           }
         } else if (const LoadInst *LI = dyn_cast<LoadInst>(UInst)){
           const Value *PO = LI->getPointerOperand();
-          if (PtrBlindedSet.contains(PO)){
-            Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
+          bool aliasInBlinded = false;
+          auto &AS = AST->getAliasSetFor(MemoryLocation::get(LI));
+          for (AliasSet::iterator ASI = AS.begin(), E = AS.end(); ASI != E; ++ASI) {
+            if (PtrBlindedSet.contains(ASI.getPointer())) {
+              aliasInBlinded = true;
+              break;
+            }
+          }
+          if (PtrBlindedSet.contains(PO) || aliasInBlinded){
+            if (PO->getType()->isPointerTy() && PO->getType()->getContainedType(0)->isPointerTy()) {
+              Worklist.push_back(std::pair<Value*, bool>(UInst, 0));
+            }
+            else {
+              Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
+            }
           }
         } else {
           if (TaintedRegisterSet.contains(CurrentVal)) {
@@ -258,17 +275,21 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
           }
         }
       } 
-      // else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {
-      //   U->print(errs());
-      //   if(GV->getType()->isPointerTy() && GV->getType()->getContainedType(0)->isPointerTy()){
-      //     errs() << "not in worklist!\n";
-      //     continue;
-      //   }
+      else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(U)) {
+        // sometimes we want to print the global
+        // U->print(errs());
+        if(GV->getType()->isPointerTy() && GV->getType()->getContainedType(0)->isPointerTy()){
+          Worklist.push_back(std::pair<Value*, bool>(GV, 0));
 
-      //   errs() << "\n";
-      //   errs() << "try to print tainted GV...\n";
-      //   Worklist.push_back(std::pair<Value*, bool>(GV, 0));
-      // }
+          errs() << "not in worklist!\n";
+          continue;
+        }
+
+        llvm_unreachable("global using ");
+        errs() << "\n";
+        errs() << "try to print tainted GV...\n";
+        Worklist.push_back(std::pair<Value*, bool>(GV, 0));
+      }
     }
   }
 }
