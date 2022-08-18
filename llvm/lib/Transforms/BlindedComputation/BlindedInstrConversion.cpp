@@ -22,11 +22,14 @@
 
 using namespace llvm;
 
-bool BlindedInstrConversionPass::checkAddDependentFunction(Function* Func) {
+bool BlindedInstrConversionPass::checkAddDependentFunction(Function* Func, SmallSet<Function *, 8> &VisitedFunctions) {
   std::vector<Function*> CallingFuncs = DependentFunctions[Func];
 
   for (auto CallingFunc : CallingFuncs) {
     if (std::find(FunctionWorkList.begin(), FunctionWorkList.end(), CallingFunc) == FunctionWorkList.end())  {
+      if (VisitedFunctions.contains(CallingFunc)) {
+        continue;
+      }
       FunctionWorkList.push_back(CallingFunc);
     }
   }
@@ -314,6 +317,7 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
       RI->print(errs());
       errs() << "\n";
     }
+    errs() << "\n";
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       Instruction &Inst = *I;
 
@@ -393,6 +397,7 @@ static bool markBlindedIfNecessary(Function &F, AAManager::Result &AA, TaintedRe
 bool BlindedInstrConversionPass::linearizeSelectInstructions(Function &F) {
   SmallVector<Instruction*,8> RemoveList;
 
+  // so, we are converting all the select even if it is not tainted?
   for (Instruction &I : inst_range(inst_begin(F), inst_end(F))) {
     if (auto *S = dyn_cast<SelectInst>(&I)) {
       auto *const CondVal = S->getCondition();
@@ -528,19 +533,27 @@ PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
 
   bool isBlindedBefore = F.hasFnAttribute(Attribute::Blinded);
 
-  if (TR.getTaintedRegisters(&AAResult).size() != TaintTrackingResult[&F]) {
-      TaintTrackingResult[&F] = TR.getTaintedRegisters(&AAResult).size();
-      checkAddDependentFunction(&F);
-  }
+  // if (TR.getTaintedRegisters(&AAResult).size() != TaintTrackingResult[&F]) {
+  //     TaintTrackingResult[&F] = TR.getTaintedRegisters(&AAResult).size();
+  //     checkAddDependentFunction(&F, VisitedFunctions);
+  // }
 
-  if (!runImpl(F, AAResult, TR, BDU, AM, VisitedFunctions)) {
-    if (isBlindedBefore != F.hasFnAttribute(Attribute::Blinded)) {
-      checkAddDependentFunction(&F);
+  int madeChange = runImpl(F, AAResult, TR, BDU, AM, VisitedFunctions);
 
-    }
-    // No changes, all analyses are preserved.
+  if (!madeChange) {
     return PreservedAnalyses::all();
   }
+  else if (isBlindedBefore != F.hasFnAttribute(Attribute::Blinded)) {
+    checkAddDependentFunction(&F, VisitedFunctions);
+  }
+
+  // if (!runImpl(F, AAResult, TR, BDU, AM, VisitedFunctions)) {
+  //   if (isBlindedBefore != F.hasFnAttribute(Attribute::Blinded)) {
+  //     checkAddDependentFunction(&F);
+  //   }
+  //   // No changes, all analyses are preserved.
+  //   return PreservedAnalyses::all();
+  // }
 
 
   PreservedAnalyses PA;
@@ -551,14 +564,16 @@ PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
   return PA;
 }
 
+
 PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
                                                   ModuleAnalysisManager &AM) {
   FunctionAnalysisManager &FAM =
       AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
-
+  
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
   PreservedAnalyses PA = PreservedAnalyses::all();
+    std::unordered_map<const Function*, SmallPtrSet<Value*, 4>> TaintInfo;
 
   CallGraph CG = CallGraph(M);
   FunctionWorkList.clear();
