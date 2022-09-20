@@ -38,6 +38,7 @@ bool BlindedDataUsage::validateBlindedData(TaintedRegisters &TR,
         LLVMContext &cont = Inst.getContext();
         MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
         Inst.setMetadata("t", N);
+        
       }
     }
 

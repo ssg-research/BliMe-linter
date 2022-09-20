@@ -42,10 +42,26 @@ void TaintedRegisters::explicitlyTaint(Value *Value) {
 
 const TaintedRegisters::ConstValueSet &
 TaintedRegisters::getTaintedRegisters(AAResults *AA) {
-  if (TaintedRegisterSet.empty()) {
+  // if (TaintedRegisterSet.empty()) {
     AST = buildAliasSetTracker(AA);
     // AST->dump();
+    for (auto I = inst_begin(F); I != inst_end(F); I++) {
+      Instruction &Instr = *I;
+      if (const CallBase *CB = dyn_cast<CallBase>(&Instr)) {
+        if (Function *CF = CB->getCalledFunction()) {
 
+          for (auto Arg = CF->arg_begin(); Arg < CF->arg_end(); ++Arg) {
+            if (Arg->hasAttribute(Attribute::Blinded) && Arg->getType()->isPointerTy()) {
+              unsigned argNo = Arg->getArgNo();
+              Value* TaintedParamPtr = CB->getArgOperand(argNo);
+              if (!PtrBlindedSet.contains(TaintedParamPtr)) {
+                propagateTaintedRegisters(TaintedParamPtr, AST.get(), false);
+              }
+            }
+          }
+        }
+      }
+    }
    // int useKey(__attribute__((blinded)) int idx) {
     for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
       if (Arg->hasAttribute(Attribute::Blinded)) {
@@ -71,7 +87,18 @@ TaintedRegisters::getTaintedRegisters(AAResults *AA) {
     for (Value *Val : ExplicitlyMarkedTainted) {
       propagateTaintedRegisters(Val, AST.get(), true);
     }
+  // }
+
+  // TODO: 
+  for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
+    if (PtrBlindedSet.contains(Arg)) {
+      unsigned int ArgNoCur = Arg->getArgNo();
+      if (!F.hasParamAttribute(ArgNoCur, Attribute::Blinded)) {
+        F.addParamAttr(ArgNoCur, Attribute::Blinded);
+      }
+    }
   }
+
   return TaintedRegisterSet;
 }
 
@@ -153,27 +180,21 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
     Value *CurrentVal = CurrentPair.first;
     bool isBlindedData = CurrentPair.second;
 
-    if (isBlindedData){
-      if (TaintedRegisterSet.contains(CurrentVal))
-        continue;
-      else
-        TaintedRegisterSet.insert(CurrentVal);
+    if (isBlindedData && !TaintedRegisterSet.contains(CurrentVal)){
+      TaintedRegisterSet.insert(CurrentVal);
     }
-    else{
-      if (PtrBlindedSet.contains(CurrentVal))
-        continue;
-      else
+    else if (!isBlindedData && !PtrBlindedSet.contains(CurrentVal)) {
         PtrBlindedSet.insert(CurrentVal);
     }
-    
-    // insert current blinded arg
-    // TaintedRegisterSet.insert(CurrentVal);
+    else {
+      continue;
+    }
 
+    // for debugging purpose
+    // extract to another function
     if (Instruction *currentInst = dyn_cast<Instruction>(CurrentVal)) {
       if (TaintedRegisterSet.contains(CurrentVal)){
         LLVMContext &cont = currentInst->getContext();
-        // MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedTag"));
-        // currentInst->setMetadata("my.md.blindedMD", N);
         MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
         currentInst->setMetadata("my.md.blinded", N);
       }
@@ -182,7 +203,6 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
         MDNode *N = MDNode::get(cont, MDString::get(cont, "blindedPtrTag"));
         currentInst->setMetadata("my.md.blindedPtr", N);
       }
-
     }
 
 //    if (const GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(UInst)) {
@@ -214,39 +234,54 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
 
         if (const StoreInst *SI = dyn_cast<StoreInst>(UInst)) {
           const Value *PO = SI->getPointerOperand();
-          if (!TaintedRegisterSet.contains(CurrentVal)) {
-            continue;
-          }
-          // if the pointer was allocated on the stack or is a global, then we can handle it
-          // if (isa<AllocaInst>(PO)) {
-          //   // FIXME: Does not handle all cases!
-          //   // For example, the Use might be a GEP based on the source Alloca!
-            
-          // } else
-          // if (TaintedRegisterSet.contains(PO)) {
+          assert(TaintedRegisterSet.contains(CurrentVal) || PtrBlindedSet.contains(CurrentVal));
 
-          // }
           if (const auto *GV = dyn_cast<GlobalVariable>(PO)) {
             if (!GV->hasAttribute(Attribute::Blinded))
               assert(false && "Invalid storage of blinded data in non-blinded memory!");
-          } else {
-            auto &AS = AST->getAliasSetFor(MemoryLocation::get(SI));
-            for (AliasSet::iterator ASI = AS.begin(), E = AS.end(); ASI != E; ++ASI) {
-              // dbgs() << "\t" << ASI.getPointer()->getName() << "\n";
-              if (!PtrBlindedSet.contains(ASI.getPointer())) {
-                Worklist.push_back(std::pair<Value*, bool>(ASI.getPointer(), 0));
-              }
+            continue;
+          } 
+
+          // in this case, we are storing into a blinded pointer
+          // FIXME: if we have a blindedptr, how to taint the alias?
+          if (CurrentVal == PO && !isBlindedData) {
+            continue;
+          }
+
+          auto &AS = AST->getAliasSetFor(MemoryLocation::get(SI));
+    
+          for (AliasSet::iterator ASI = AS.begin(), E = AS.end(); ASI != E; ++ASI) {
+            // dbgs() << "\t" << ASI.getPointer()->getName() << "\n";
+            if (!PtrBlindedSet.contains(ASI.getPointer())) {
+              Worklist.push_back(std::pair<Value*, bool>(ASI.getPointer(), 0));
             }
           }
-        } else if (const CallBase *CB = dyn_cast<CallBase>(UInst)) {
+
+        } 
+        
+        else if (const CallBase *CB = dyn_cast<CallBase>(UInst)) {
           if (Function *CF = CB->getCalledFunction()) {
+            // TODO:
+            for (auto Arg = CF->arg_begin(); Arg < CF->arg_end(); ++Arg) {
+              if (Arg->hasAttribute(Attribute::Blinded) && Arg->getType()->isPointerTy()) {
+                unsigned argNo = Arg->getArgNo();
+                Value* TaintedParamPtr = CB->getArgOperand(argNo);
+                if (!PtrBlindedSet.contains(TaintedParamPtr)) {
+                  Worklist.push_back(std::pair<Value*, bool>(TaintedParamPtr, 0));
+                }
+              }
+            }
+            // if the ret of CF is ptr, should be blnd ptr
             if (CF->hasFnAttribute(Attribute::Blinded))
               Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
           } else {
+            // FIXME: can be refined with pointer analysis
             // assume return value from indirect function call is tainted
               Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
           }
-        } else if (const LoadInst *LI = dyn_cast<LoadInst>(UInst)){
+        } 
+        
+        else if (const LoadInst *LI = dyn_cast<LoadInst>(UInst)){
           const Value *PO = LI->getPointerOperand();
           bool aliasInBlinded = false;
           auto &AS = AST->getAliasSetFor(MemoryLocation::get(LI));
@@ -264,7 +299,9 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
               Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
             }
           }
-        } else {
+        } 
+        
+        else {
           if (TaintedRegisterSet.contains(CurrentVal)) {
             Worklist.push_back(std::pair<Value*, bool>(UInst, 1));
           }
@@ -280,8 +317,6 @@ void TaintedRegisters::propagateTaintedRegisters(Value *TaintedArg,
         // U->print(errs());
         if(GV->getType()->isPointerTy() && GV->getType()->getContainedType(0)->isPointerTy()){
           Worklist.push_back(std::pair<Value*, bool>(GV, 0));
-
-          errs() << "not in worklist!\n";
           continue;
         }
 

@@ -9,6 +9,8 @@
 #include <vector>
 #include <unordered_map>
 
+
+
 namespace llvm {
 
 class BlindedInstrConversionPass : public PassInfoMixin<BlindedInstrConversionPass> {
@@ -27,9 +29,13 @@ private:
       Function &F, AAManager::Result &AA, TaintedRegisters &TR,
       FunctionAnalysisManager &AM, SmallSet<Function *, 8> &VisitedFunctions);
 
+  PreservedAnalyses taintTrackingAll(Module& M, ModuleAnalysisManager &AM);
+  PreservedAnalyses runAnalysis(Function &F, FunctionAnalysisManager &AM,
+                        SmallSet<Function *, 8> &VisitedFunctions);
+
   bool linearizeSelectInstructions(Function &F);
 
-  bool checkAddDependentFunction(Function *F);
+  bool checkAddDependentFunction(Function *F, SmallSet<Function *, 8> &VisitedFunctions);
 
   bool runImpl(Function &F, AAManager::Result &AA, TaintedRegisters &TR,
                BlindedDataUsage &BDU, FunctionAnalysisManager &AM,
@@ -47,9 +53,9 @@ private:
     return Result;
   }
   std::vector<Function*> FunctionWorkList;
+  std::unordered_map<Function*, SmallPtrSet<Value*, 4>> TaintInfo;
   std::unordered_map<const Function*, std::vector<Function*>> DependentFunctions;
   std::unordered_map<const Function*, int> TaintTrackingResult;
-
 
 };
 
