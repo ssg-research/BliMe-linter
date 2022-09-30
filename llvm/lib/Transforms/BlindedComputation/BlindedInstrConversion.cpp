@@ -10,6 +10,7 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include "llvm/Analysis/TaintTracking.h"
+#include "llvm/Analysis/AddTaintMetadata.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/BlindedDataUsage.h"
 #include "llvm/Analysis/CFLSteensAliasAnalysis.h"
@@ -18,6 +19,13 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <unordered_map>
+#include "llvm/Analysis/SVF/WPA/WPAPass.h"
+#include "llvm/Analysis/SVF/WPA/Andersen.h"
+#include "llvm/Analysis/SVF/Util/SVFUtil.h"
+#include "llvm/Analysis/SVF/Util/SVFModule.h"
+#include "llvm/Analysis/SVF/SVF-FE/LLVMUtil.h"
+#include "llvm/Analysis/SVF/SVF-FE/GEPTypeBridgeIterator.h"
+#include "llvm/Analysis/SVF/SVF-FE/PAGBuilder.h"
 
 
 using namespace llvm;
@@ -309,6 +317,7 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
   while (true) {
     bool KeepGoing = false;
     const auto *TRSet = &TR.getTaintedRegisters(&AA);
+
     if (!TRSet) {
       llvm_unreachable("null TRset!");
 
@@ -318,6 +327,7 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
       errs() << "\n";
     }
     errs() << "\n";
+
     for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
       Instruction &Inst = *I;
 
@@ -326,12 +336,17 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
         if (Function *CF = CB->getCalledFunction()) {
           // look for blinded arguments going to non-blinded paramaters
           SmallVector<unsigned, 8> BlindedParams;
+          SmallVector<unsigned, 8> BlindedParamsOld;
+          SmallVector<unsigned, 8> BlindedParamsNew;
 
           for (auto &Arg : CB->args()) {
             unsigned n = Arg.getOperandNo();
             if (TRSet->contains(Arg) &&
                 !CF->hasParamAttribute(n, Attribute::Blinded)) {
               BlindedParams.push_back(n);
+            }
+            if (CF->hasParamAttribute(n, Attribute::Blinded)) {
+              BlindedParamsOld.push_back(n);
             }
           }
           if (std::find(FunctionWorkList.begin(), FunctionWorkList.end(), CF) != FunctionWorkList.end()) {
@@ -344,6 +359,13 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
                    : propagateBlindedArgumentFunctionCall(
                          *CB, *CF, BlindedParams, AM, VisitedFunctions));
 
+          Function* NewCF = CB->getCalledFunction();
+          for (auto Arg = NewCF->arg_begin(); Arg != NewCF->arg_end(); Arg++) {
+              unsigned ArgNo = Arg->getArgNo();
+              if (NewCF->hasParamAttribute(ArgNo, Attribute::Blinded)) {
+                BlindedParamsNew.push_back(ArgNo);
+              }
+          }
           if (TRSet->contains(CB) && !IsReturnBlinded) {
             TR.releaseMemory();
             KeepGoing = true;
@@ -352,7 +374,21 @@ void BlindedInstrConversionPass::propagateBlindedArgumentFunctionCalls(
             TR.explicitlyTaint(CB);
             KeepGoing = true;
             break;
+          } 
+          else if (BlindedParamsNew != BlindedParamsOld) {
+            errs() << "old: " << "\n";
+            for (auto num : BlindedParamsOld) {
+              errs() << num << "\n";
+            }
+            errs() << "new: " << "\n";
+            for (auto num : BlindedParamsNew) {
+              errs() << num << "\n";
+            }
+            TR.releaseMemory();
+            KeepGoing = true;
+            break;
           }
+
         } else {
           // const llvm::DebugLoc &debugInfo = Inst.getDebugLoc();
           dbgs() << "Skipping indirect function call.\n";
@@ -572,8 +608,17 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
+  SVF::SVFModule* svfModule = SVF::LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(M);
+
+	SVF::PAGBuilder builder;
+  SVF::PAG* pag = builder.build(svfModule);
+
+  SVF::Andersen* ander = SVF::AndersenWaveDiff::createAndersenWaveDiff(pag);
+
+
+
   PreservedAnalyses PA = PreservedAnalyses::all();
-    std::unordered_map<const Function*, SmallPtrSet<Value*, 4>> TaintInfo;
+  std::unordered_map<const Function*, SmallPtrSet<Value*, 4>> TaintInfo;
 
   CallGraph CG = CallGraph(M);
   FunctionWorkList.clear();
