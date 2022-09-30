@@ -1,5 +1,4 @@
 // RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
-// XFAIL: *
 //
 // Test whether we are dependent on tranformation order. Specifically, the 
 // gimme_blind_* function here are used in simpleTest but are partially

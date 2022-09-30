@@ -1,12 +1,7 @@
 ; RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
-; XFAIL: *
 
-; This test fails due to inaccurate taint analysis. 
-; In accessArray, in %1, we load from a "pointer to pointer to blinded data" 
-; but see the result as blinded data rather than pointer to blinded data.
-; As a result, in %2 sentence, BlindedDataUsage.cpp determines that we are
-; using blinded data as pointer to load, which is a violation to the policy.
-; Remove XFAIL when better taint analysis get implemented and try if it's fixed.
+; The test is temporarily fixed.
+; Potentially fail when adding new blindedptr attribute.
 
 @key = dso_local global i32 2, align 4 #0
 @pKey = dso_local global i32* @key, align 8

@@ -1,8 +1,11 @@
+// RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
+
+
 /*
 This test tests the taint propagation through return value in a cyclic call graph.
 A --->    B  ---> D ---> E
 |     |      |           |
---< --C      <------------
+--< --C      <-----------
 */
 
 

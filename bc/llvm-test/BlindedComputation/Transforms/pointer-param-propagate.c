@@ -1,3 +1,6 @@
+// RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
+// XFAIL: *
+
 #include <stdio.h>
 
 #define noinline __attribute__((noinline))
@@ -5,33 +8,43 @@
 
 blinded int globalBlinded = 12;
 
-int blnd_a(int a, int* b) {
+noinline int blnd_a(int a, int* b) {
 	*b = a;
 	return a;
 }
 
-void blnd_b(blinded int* q) {
-  *q = globalBlinded;
-}
-
-void blnd_c(blinded int* q) {
+noinline void blnd_b(blinded int* q) {
   *q = 15;
 }
 
-// non_blnd update when returning from blnd_a
-int use_blnd(blinded int blnd_arg) {
+noinline int use_blnd_a(blinded int blnd_arg) {
 	int non_blnd = 7;
+
+  // will propagate blnd_arg to the non_blnd pointer
 	blnd_a(blnd_arg, &non_blnd);
-  int to_ret = non_blnd + 10;
-	return to_ret;
+
+  // the braching based on the value of non_blnd will be tainted
+  return non_blnd;
+}
+
+noinline int use_blnd_b(int* normal_arg) {
+  blnd_b(normal_arg);
+  if (*normal_arg > 0) {
+    return 12;
+  }
+  else {
+    return 10;
+  }
 }
 
 int main() {
-    int non_blnd_b, non_blnd_c;
-    int used = use_blnd(15);
+    int non_blnd_b = 10, non_blnd_c;
+    // a: the parameter is not blinded. But tainted inside.
+    // b: the parameter is blinded, though the input pointer is overwritten
+    //    by a non-sensitive value.
+    int used_a = use_blnd_a(15);
+    int used_b = use_blnd_b(&non_blnd_b);
+    printf("%d, %d", used_a, used_b);
 
-    blnd_b(&non_blnd_b);
-    blnd_c(&non_blnd_c);
-    printf("%d", use_blnd(15));
     return 0;
 }
