@@ -150,3 +150,5 @@ add_llvm_component_library(LLVMAnalysis
   LINK_LIBS
   ${MLLinkDeps}
   )
+
+add_subdirectory(SVF)
