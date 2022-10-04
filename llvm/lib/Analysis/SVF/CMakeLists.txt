@@ -24,10 +24,12 @@ file (GLOB SOURCES
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/llvm/Analysis)
 llvm_map_components_to_libnames(llvm_libs bitwriter core ipo irreader instcombine instrumentation linker analysis scalaropts support )
-add_llvm_library(Svf STATIC ${SOURCES} )
+add_llvm_library(Svf STATIC ${SOURCES} 
+        DEPENDS
+        intrinsics_gen)
 target_link_libraries(Svf ${llvm_libs} Cudd LLVMTransformUtils)
 
-add_dependencies(Svf intrinsics_gen)
+# add_dependencies(Svf intrinsics_gen)
 
 # add_llvm_library(Svf STATIC ${SOURCES} LINK_LIBS Cudd)
 
