@@ -26,6 +26,7 @@
 #include "llvm/Analysis/SVF/SVF-FE/LLVMUtil.h"
 #include "llvm/Analysis/SVF/SVF-FE/GEPTypeBridgeIterator.h"
 #include "llvm/Analysis/SVF/SVF-FE/PAGBuilder.h"
+#include "llvm/Transforms/BlindedComputation/BlindedTaintTracking.h"
 
 
 using namespace llvm;
@@ -608,14 +609,9 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
-  SVF::SVFModule* svfModule = SVF::LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(M);
-
-	SVF::PAGBuilder builder;
-  SVF::PAG* pag = builder.build(svfModule);
-
-  SVF::Andersen* ander = SVF::AndersenWaveDiff::createAndersenWaveDiff(pag);
-
-
+  BlindedTaintTracking BTT = BlindedTaintTracking(M);
+  BTT.buildTaintedSet(0, M);
+  errs() << "finished building TT...\n";
 
   PreservedAnalyses PA = PreservedAnalyses::all();
   std::unordered_map<const Function*, SmallPtrSet<Value*, 4>> TaintInfo;
