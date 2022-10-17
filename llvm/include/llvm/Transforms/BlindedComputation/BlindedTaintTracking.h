@@ -45,6 +45,12 @@ public:
 	void markInstrsForConversion();
 	void printInstrsForConversion();
 
+	std::set<const Value*> TaintedValues;
+	std::vector<Value*> BlndBr;
+	std::vector<Value*> BlndGep;
+	std::vector<Value*> BlndMemOp;
+	std::vector<Value*> PolicyViolations;
+
 private:
 
 	// We expect VFGNodes to be converted to llvm values for transformation.
@@ -52,14 +58,16 @@ private:
 
 	// Store the tainted llvm value
 	std::vector<const SVF::VFGNode*> TaintSource;
-	std::vector<Value*> TaintedValues;
 
 	// This function builds worklist to be propagated
 	void extractTaintSource(Function &F);
 	void extractTaintSource(Module &M);
 
+	// void taintTrackingValueNode(Value* value, std::vector<const SVF::VFGNode*>& vfgNodeWorkList, std::vector<const Value*>& llvmValueWorkList);
+	// void taintTrackingVFGNode(SVF::VFGNode* vfgNode, std::vector<const SVF::VFGNode*>& vfgNodeWorkList, std::vector<const Value*>& llvmValueWorkList);
+
 	const SVF::VFGNode* LLVMValue2VFGNode(Value* value);
-	const Value* VFGNode2LLVMValue(SVF::SVFGNode* node); 
+	const Value* VFGNode2LLVMValue(const SVF::SVFGNode* node); 
 
 
 };

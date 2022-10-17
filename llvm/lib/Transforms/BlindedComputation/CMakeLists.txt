@@ -5,6 +5,7 @@
 
 add_llvm_component_library(LLVMBlindedComputation
   BlindedInstrConversion.cpp
+  BlindedTaintTracking.cpp
 
   DEPENDS
   intrinsics_gen
