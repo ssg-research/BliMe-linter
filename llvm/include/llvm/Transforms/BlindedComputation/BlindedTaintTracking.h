@@ -42,21 +42,27 @@ public:
 
 	// iteration: the max time of function cloning
 	void buildTaintedSet(int iteration, Module& M);
-	void markInstrsForConversion();
+	void markInstrsForConversion(bool clear = false);
 	void printInstrsForConversion();
 
+	// We assume the programmer will use these sets directly
 	std::set<const Value*> TaintedValues;
-	std::vector<Value*> BlndBr;
-	std::vector<Value*> BlndGep;
-	std::vector<Value*> BlndMemOp;
-	std::vector<Value*> PolicyViolations;
+	std::vector<const Value*> BlndBr;
+	std::vector<const Value*> BlndGep;
+	std::vector<const Value*> BlndMemOp;
+	std::vector<const Value*> BlndSelect;
+
+	std::vector<const Value*> PolicyViolations;
 
 private:
 
+	bool InstrsMarked = false;
 	// Store the tainted llvm value
 	std::vector<const SVF::VFGNode*> TaintSource;
 
 	bool addTaintedValue(const Value* V);
+	void clearResults();
+	void clearInstrConvSet();
 
 	// This function builds worklist to be propagated
 	void extractTaintSource(Function &F);

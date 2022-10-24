@@ -6,6 +6,21 @@ using namespace llvm;
 // TODO: maybe we need to also add blinded ptr metadata
 // Current solution is to leave the task of differentiating different
 // cases to the validate/transform
+
+void BlindedTaintTracking::clearResults() {
+	clearInstrConvSet();
+	TaintedValues.clear();
+	TaintSource.clear();
+}
+
+
+void BlindedTaintTracking::clearInstrConvSet() {
+	BlndBr.clear();
+	BlndMemOp.clear();
+	BlndGep.clear();
+	BlndSelect.clear();
+}
+
 bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 	if (const Instruction* vInstr = dyn_cast<Instruction>(V)) {
 		if (TaintedValues.count(V)) {
@@ -23,10 +38,11 @@ bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 
 
 void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
-
+	clearResults();
 	extractTaintSource(M);
 	std::set<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> handledNodes;
 	std::vector<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> vfgNodeWorkList;
+
 
 	for (auto vfgNode : TaintSource) {
 		vfgNodeWorkList.push_back({nullptr, vfgNode});
@@ -101,37 +117,52 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 
 		}
 	}
+	InstrsMarked = false;
 	printInstrsForConversion();
 }
 
-void BlindedTaintTracking::markInstrsForConversion() {
+void BlindedTaintTracking::markInstrsForConversion(bool clear) {
+	if (clear) {
+		clearInstrConvSet();
+	}
+	else if (InstrsMarked) {
+		return;
+	}
+
 	for (auto Val : TaintedValues) {
 		for (auto U : Val->users()) {
 			auto ValUser = dyn_cast<Instruction>(U);
 			if (const BranchInst *BrInst = dyn_cast<BranchInst>(ValUser)) {
 				if (BrInst->isConditional() && TaintedValues.count(BrInst->getCondition())){
-					BranchInst* NBrInst = const_cast<BranchInst*>(BrInst);
-					BlndBr.push_back(NBrInst);
+					// BranchInst* NBrInst = const_cast<BranchInst*>(BrInst);
+					BlndBr.push_back(BrInst);
 				}
 			}					
 			else if (const LoadInst *LInst = dyn_cast<LoadInst>(ValUser)) {
 				// Load using sensitive value
 				// This is not handled yet. Current implementation actually handles GEP
-				LoadInst* NLInst = const_cast<LoadInst*>(LInst);
-				BlndMemOp.push_back(NLInst);
-			}
-			else if (const GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(ValUser)) {
-				GetElementPtrInst* NGEPInst = const_cast<GetElementPtrInst*>(GEPInst);
-				BlndGep.push_back(NGEPInst);
+				// LoadInst* NLInst = const_cast<LoadInst*>(LInst);
+				BlndMemOp.push_back(LInst);
 			}
 			else if (const StoreInst *SInst = dyn_cast<StoreInst>(ValUser)) {
 				// Store using sensitive value
 				// This is not handled yet. Current implementation actually handles GEP
-				StoreInst* NSInst = const_cast<StoreInst*>(SInst);
-				BlndMemOp.push_back(NSInst);
+				// StoreInst* NSInst = const_cast<StoreInst*>(SInst);
+				BlndMemOp.push_back(SInst);
+			}
+			// This is likely to be temporary. 
+			// We will finally handle the memory access only based on l/s instrs
+			// and the def of the pointer operand
+			else if (const GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(ValUser)) {
+				// GetElementPtrInst* NGEPInst = const_cast<GetElementPtrInst*>(GEPInst);
+				BlndGep.push_back(GEPInst);
+			}
+			else if (const SelectInst* SelInst = dyn_cast<SelectInst>(ValUser)) {
+				BlndSelect.push_back(SelInst);
 			}
 		}
 	}
+	InstrsMarked = true;
 
 }
 
