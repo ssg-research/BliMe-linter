@@ -53,11 +53,10 @@ public:
 
 private:
 
-	// We expect VFGNodes to be converted to llvm values for transformation.
-	std::set<const SVF::VFGNode*> TaintedVFGNodes;
-
 	// Store the tainted llvm value
 	std::vector<const SVF::VFGNode*> TaintSource;
+
+	bool addTaintedValue(const Value* V);
 
 	// This function builds worklist to be propagated
 	void extractTaintSource(Function &F);

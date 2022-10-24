@@ -2,81 +2,88 @@
 
 using namespace llvm;
 
+// TODO: maybe we can have more information for transformer to handle
+// TODO: maybe we need to also add blinded ptr metadata
+// Current solution is to leave the task of differentiating different
+// cases to the validate/transform
+bool BlindedTaintTracking::addTaintedValue(const Value* V) {
+	if (const Instruction* vInstr = dyn_cast<Instruction>(V)) {
+		if (TaintedValues.count(V)) {
+			return false;
+		}
+		TaintedValues.insert(V);
+		LLVMContext &cont = vInstr->getContext();
+		MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+		const_cast<Instruction*>(vInstr)->setMetadata("my.md.blindedNTT", N);
+		return true;
+	}
+	errs() << "While handling value: " << V << "\n"; 
+	assert(false && "Trying give a non-instr blinded attribute\n");
+}
+
 
 void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 
 	extractTaintSource(M);
-	std::set<const SVF::VFGNode*> handledNodes;
-	std::vector<const SVF::VFGNode*> vfgNodeWorkList;
+	std::set<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> handledNodes;
+	std::vector<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> vfgNodeWorkList;
 
 	for (auto vfgNode : TaintSource) {
-		vfgNodeWorkList.push_back(vfgNode);
+		vfgNodeWorkList.push_back({nullptr, vfgNode});
 	}
 
 	while (!vfgNodeWorkList.empty()) {
-		const SVF::VFGNode* vfgNode = vfgNodeWorkList.back();
+		auto backPair = vfgNodeWorkList.back();
+		const SVF::VFGNode* vfgNode = backPair.second;
+		const SVF::VFGNode* predVFGNode = backPair.first;
+
 		vfgNodeWorkList.pop_back();
 		errs() << "handling: " << vfgNode->toString() << "\n";
 
-		if (handledNodes.count(vfgNode)) {
+		if (handledNodes.count(backPair)) {
 			continue;
 		}
-		handledNodes.insert(vfgNode);
+		handledNodes.insert(backPair);
 
 		const Value* valNode = VFGNode2LLVMValue(vfgNode);
 		if (valNode == nullptr) {
 			errs() << "ValNode is nullptr " << "\n"; 
 		}
 
-		if (vfgNode->getNodeKind() == SVF::VFGNode::VFGNodeK::Load) {
-			if (const LoadInst* LI = dyn_cast<LoadInst>(valNode)) {
-				const Value *PO = LI->getPointerOperand();
-				// check if blinded ptr
-				// PO <- blinded (what now?) <- policy violation? Detect later
-				// LI <- blinded (NOW)       <- not violation			
+		if (valNode != nullptr){
+			if (const Instruction* instr = dyn_cast<Instruction>(valNode)) {
+				if (const LoadInst* LI = dyn_cast<LoadInst>(valNode)) {
+					const Value *PO = LI->getPointerOperand();
 
-				if (PO->getType()->isPointerTy() && !PO->getType()->getContainedType(0)->isPointerTy()) {
-					if (TaintedValues.count(valNode)) {
-						// TODO: not sure if it is the correct way.
+					// check if blinded ptr
+					// PO <- blinded (what now?) <- policy violation? Detect later
+					// LI <- blinded (NOW)       <- not violation
+					// TODO: Write a test to see if it works
+					const Value *predVal = VFGNode2LLVMValue(predVFGNode);	
+					if (PO == predVal && TaintedValues.count(predVal)) {
 						continue;
 					}
-					TaintedValues.insert(valNode);
-					LLVMContext &cont = LI->getContext();
-					MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
-					const_cast<LoadInst*>(LI)->setMetadata("my.md.blindedNTT", N);
-        }
-			}
-		} 
-		else if (valNode != nullptr){
-			if (const Instruction* instr = dyn_cast<Instruction>(valNode)) {
-				// if (const GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(instr)) {
-				// 	// TODO: handle ptr
-				// }
-				if (const StoreInst* StoreInstr = dyn_cast<StoreInst>(instr)) {
-					// TODO: handle ptr
+
+					if (PO->getType()->isPointerTy() && !PO->getType()->getContainedType(0)->isPointerTy()) {
+						if (TaintedValues.count(valNode)) {
+							continue;
+						}
+						addTaintedValue(valNode);
+					}
 				}
-				else if (const AllocaInst* AllocaInstr = dyn_cast<AllocaInst>(instr)) {
-					// TODO: handle ptr
-				}
-				else if (const CmpInst* CmpInstr = dyn_cast<CmpInst>(instr)) {
-					TaintedValues.insert(valNode);
-					LLVMContext &cont = instr->getContext();
-        	MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
-        	const_cast<Instruction*>(instr)->setMetadata("my.md.blindedNTT", N);
+				if (const CmpInst* CmpInstr = dyn_cast<CmpInst>(instr)) {
+					addTaintedValue(instr);
 					for (auto CmpUser : valNode->users()) {
 						const Value* CmpUserVal = dyn_cast<Value>(CmpUser);
 						Value* NCmpUserVal = const_cast<Value*>(CmpUserVal);
 						const SVF::VFGNode* CmpVFGNode = LLVMValue2VFGNode(NCmpUserVal);
 						if (CmpVFGNode != nullptr) {
-							vfgNodeWorkList.push_back(CmpVFGNode);
+							vfgNodeWorkList.push_back({vfgNode, CmpVFGNode});
 						}
 					}
 				}
 				else {
-					TaintedValues.insert(valNode);
-					LLVMContext &cont = instr->getContext();
-        	MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
-        	const_cast<Instruction*>(instr)->setMetadata("my.md.blindedNTT", N);
+					addTaintedValue(valNode);
 				}
 			}
     }
@@ -85,11 +92,11 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 			SVF::VFGEdge *edge = *it;
 			SVF::VFGNode *dstNode = edge->getDstNode();
 
-			if (!handledNodes.count(dstNode)) {
-				vfgNodeWorkList.push_back(dstNode);
-				if (vfgNode->getNodeKind() == SVF::VFGNode::FParm) {
-					errs() << "VFGFParmNode: " << vfgNode->toString() << "\n" << dstNode->toString() << "\n";
-				}
+			if (!handledNodes.count({vfgNode, dstNode})) {
+				vfgNodeWorkList.push_back({vfgNode, dstNode});
+				// if (vfgNode->getNodeKind() == SVF::VFGNode::FParm) {
+				// 	errs() << "VFGFParmNode: " << vfgNode->toString() << "\n" << dstNode->toString() << "\n";
+				// }
 			}
 
 		}
@@ -144,6 +151,10 @@ void BlindedTaintTracking::extractTaintSource(Function &F) {
 			errs() << "Marking formal parameter: " << Arg->getName() << "\n";
 			assert(taintedArg != nullptr && ("Failed to fetch VFGNode from taintedArg " + Arg->getName().str()).c_str());
 			TaintSource.push_back(taintedArg);
+			// if the formal parameter is a non-pointer type, it should also be a tainted value
+			if (!Arg->getType()->isPointerTy()) {
+				TaintedValues.insert(Arg);
+			}
 		}
 	}
 
@@ -216,7 +227,7 @@ const Value* BlindedTaintTracking::VFGNode2LLVMValue(const SVF::SVFGNode* node) 
 			const Value* unaryOpVal = unaryOpVFGNode->getRes()->getValue();
 			if (isa<UnaryOperator>(unaryOpVal)) {
 				return unaryOpVal;
-			}
+			} 
 			else {
 				return nullptr;
 			}
