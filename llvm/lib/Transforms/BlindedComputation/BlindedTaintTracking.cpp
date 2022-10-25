@@ -85,21 +85,45 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 							continue;
 						}
 						addTaintedValue(valNode);
-					}
-				}
-				if (const CmpInst* CmpInstr = dyn_cast<CmpInst>(instr)) {
-					addTaintedValue(instr);
-					for (auto CmpUser : valNode->users()) {
-						const Value* CmpUserVal = dyn_cast<Value>(CmpUser);
-						Value* NCmpUserVal = const_cast<Value*>(CmpUserVal);
-						const SVF::VFGNode* CmpVFGNode = LLVMValue2VFGNode(NCmpUserVal);
-						if (CmpVFGNode != nullptr) {
-							vfgNodeWorkList.push_back({vfgNode, CmpVFGNode});
+						for (auto valUser : valNode->users()) {
+							const Value* valUserVal = dyn_cast<Value>(valUser);
+							Value* NValUserVal = const_cast<Value*>(valUserVal);
+							if (!isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal)) {
+								const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
+								if (NValUserVal != nullptr) {
+									if (!handledNodes.count({vfgNode, userVFGNode})) {
+										vfgNodeWorkList.push_back({vfgNode, userVFGNode});
+									}
+								}
+							}
 						}
 					}
 				}
+				// if (const CmpInst* CmpInstr = dyn_cast<CmpInst>(instr)) {
+				// 	addTaintedValue(instr);
+				// 	for (auto CmpUser : valNode->users()) {
+				// 		const Value* CmpUserVal = dyn_cast<Value>(CmpUser);
+				// 		Value* NCmpUserVal = const_cast<Value*>(CmpUserVal);
+				// 		const SVF::VFGNode* CmpVFGNode = LLVMValue2VFGNode(NCmpUserVal);
+				// 		if (CmpVFGNode != nullptr) {
+				// 			vfgNodeWorkList.push_back({vfgNode, CmpVFGNode});
+				// 		}
+				// 	}
+				// }
 				else {
 					addTaintedValue(valNode);
+					for (auto valUser : valNode->users()) {
+						const Value* valUserVal = dyn_cast<Value>(valUser);
+						Value* NValUserVal = const_cast<Value*>(valUserVal);
+						if (!isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal)) {
+							const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
+							if (NValUserVal != nullptr) {
+								if (!handledNodes.count({vfgNode, userVFGNode})) {
+									vfgNodeWorkList.push_back({vfgNode, userVFGNode});
+								}
+							}
+						}
+					}
 				}
 			}
     }
@@ -119,6 +143,7 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 	}
 	InstrsMarked = false;
 	printInstrsForConversion();
+	markInstrsForConversion();
 }
 
 void BlindedTaintTracking::markInstrsForConversion(bool clear) {
@@ -212,6 +237,7 @@ void BlindedTaintTracking::extractTaintSource(Module &M) {
 }
 
 const SVF::VFGNode* BlindedTaintTracking::LLVMValue2VFGNode(Value* value) {
+	errs() << "converting: " << *value << "\n";
 	SVF::PAGNode* pNode = pag->getPAGNode(pag->getValueNode(value));
 	const SVF::VFGNode* vfgNode = svfg->getDefSVFGNode(pNode);
 	return vfgNode;

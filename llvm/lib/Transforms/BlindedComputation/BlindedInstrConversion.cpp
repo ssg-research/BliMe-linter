@@ -1,33 +1,4 @@
 #include "llvm/Transforms/BlindedComputation/BlindedInstrConversion.h"
-#include "llvm/ADT/SetVector.h"
-#include "llvm/ADT/APInt.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/InstIterator.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/ValueMap.h"
-#include <llvm/IR/DebugLoc.h>
-#include <llvm/IR/DebugInfoMetadata.h>
-#include "llvm/Analysis/TaintTracking.h"
-#include "llvm/Analysis/AddTaintMetadata.h"
-#include "llvm/Analysis/BasicAliasAnalysis.h"
-#include "llvm/Analysis/BlindedDataUsage.h"
-#include "llvm/Analysis/CFLSteensAliasAnalysis.h"
-#include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/Analysis/CallGraph.h"
-#include <llvm/IR/DebugLoc.h>
-#include <llvm/IR/DebugInfoMetadata.h>
-#include <unordered_map>
-#include "llvm/Analysis/SVF/WPA/WPAPass.h"
-#include "llvm/Analysis/SVF/WPA/Andersen.h"
-#include "llvm/Analysis/SVF/Util/SVFUtil.h"
-#include "llvm/Analysis/SVF/Util/SVFModule.h"
-#include "llvm/Analysis/SVF/SVF-FE/LLVMUtil.h"
-#include "llvm/Analysis/SVF/SVF-FE/GEPTypeBridgeIterator.h"
-#include "llvm/Analysis/SVF/SVF-FE/PAGBuilder.h"
-#include "llvm/Transforms/BlindedComputation/BlindedTaintTracking.h"
-
 
 using namespace llvm;
 
@@ -88,8 +59,7 @@ void updateGEPAddrUsers(GetElementPtrInst *GEP, Value *NewOperand) {
   }
 }
 
-static bool expandBlindedArrayAccess(Function &F,
-                                     Value *TaintedIdx,
+static bool expandBlindedArrayAccess(Value *TaintedIdx,
                                      GetElementPtrInst *GEP) {
   bool MadeChange = false;
 
@@ -124,7 +94,7 @@ static bool expandBlindedArrayAccess(Function &F,
 
     BasicBlock *LoopBodyBB = BasicBlock::Create(Context,
                                                 GEPName + ".loop.body",
-                                                &F,
+                                                GEP->getFunction(),
                                                 AfterLoopBB);
 
     Builder.SetInsertPoint(LoopHeaderBB);
@@ -221,7 +191,7 @@ static bool expandBlindedArrayAccesses(Function &F,
   while (!WorkList.empty()) {
     GetElementPtrInst *I = WorkList.pop_back_val();
     Value *TaintedIdx = TaintedIndices.pop_back_val();
-    MadeChange |= expandBlindedArrayAccess(F, TaintedIdx, I);
+    MadeChange |= expandBlindedArrayAccess(TaintedIdx, I);
   }
 
   if (MadeChange) {
@@ -231,6 +201,24 @@ static bool expandBlindedArrayAccesses(Function &F,
   }
 
   return MadeChange;
+}
+
+static bool expandBlindedArrayAccesses(Module &M,
+                                       BlindedTaintTracking &BTT) {
+
+  for (auto Instr : BTT.BlndGep) {
+    const GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(Instr);
+    errs() << *Instr;
+    assert(GEPInstr && "failed in conversion from Value* to GEP* in expandBlindedArrayAccesses");
+    for (auto Idx = GEPInstr->idx_begin(); Idx != GEPInstr->idx_end(); Idx++) {
+      if (BTT.TaintedValues.count(*Idx)) {
+        GetElementPtrInst* NGEPInstr = const_cast<GetElementPtrInst*>(GEPInstr);
+        expandBlindedArrayAccess(*Idx, NGEPInstr);
+      }
+    }
+  }
+
+  return true;
 }
 
 Function *BlindedInstrConversionPass::generateBlindedCopy(
@@ -602,6 +590,11 @@ PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
 }
 
 
+void BlindedInstrConversionPass::transformer(Module& M, BlindedTaintTracking& BTT) {
+  expandBlindedArrayAccesses(M, BTT);
+}
+
+
 PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
                                                   ModuleAnalysisManager &AM) {
   FunctionAnalysisManager &FAM =
@@ -611,68 +604,69 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
 
   BlindedTaintTracking BTT = BlindedTaintTracking(M);
   BTT.buildTaintedSet(0, M);
-  errs() << "finished building TT...\n";
+  transformer(M, BTT);
+  // errs() << "finished building TT...\n";
 
   PreservedAnalyses PA = PreservedAnalyses::all();
-  std::unordered_map<const Function*, SmallPtrSet<Value*, 4>> TaintInfo;
+  // std::unordered_map<const Function*, SmallPtrSet<Value*, 4>> TaintInfo;
 
-  CallGraph CG = CallGraph(M);
-  FunctionWorkList.clear();
+  // CallGraph CG = CallGraph(M);
+  // FunctionWorkList.clear();
 
-  for (Function &F : M) {
-    if (F.isDeclaration()) {
-      continue;
-    }
-    FunctionWorkList.push_back(&F);
-    std::vector<Function*> CallingFuncVec;
-    DependentFunctions[&F] = CallingFuncVec;
-  }
+  // for (Function &F : M) {
+  //   if (F.isDeclaration()) {
+  //     continue;
+  //   }
+  //   FunctionWorkList.push_back(&F);
+  //   std::vector<Function*> CallingFuncVec;
+  //   DependentFunctions[&F] = CallingFuncVec;
+  // }
 
-  for (auto ite = CG.begin(); ite != CG.end(); ite++) {
-    CallGraphNode* CGN = ite->second.get();
-    const Function* CallingFunc = ite->first;
+  // for (auto ite = CG.begin(); ite != CG.end(); ite++) {
+  //   CallGraphNode* CGN = ite->second.get();
+  //   const Function* CallingFunc = ite->first;
 
-    if (CallingFunc && !CallingFunc->isDeclaration()) {
+  //   if (CallingFunc && !CallingFunc->isDeclaration()) {
 
-      // errs() << "analyzing: " << CallingFunc->getName() << "\n";
-      // errs() << CGN->size() << "\n\n";
+  //     // errs() << "analyzing: " << CallingFunc->getName() << "\n";
+  //     // errs() << CGN->size() << "\n\n";
       
-      for (unsigned int i = 0; i < CGN->size(); i++) {
-        Function* CurrentCalledFunc = ((*CGN)[i])->getFunction();
-        if (!CurrentCalledFunc)
-          continue;
-        if (CurrentCalledFunc->isDeclaration()) 
-          continue;
-        // errs() << CurrentCalledFunc->getName() << "\n";
-        DependentFunctions[CallingFunc].push_back(CurrentCalledFunc);
-        TaintTrackingResult[CallingFunc] = -1;
-      }
-      // errs() << "\n\n";
-    }
-  }
+  //     for (unsigned int i = 0; i < CGN->size(); i++) {
+  //       Function* CurrentCalledFunc = ((*CGN)[i])->getFunction();
+  //       if (!CurrentCalledFunc)
+  //         continue;
+  //       if (CurrentCalledFunc->isDeclaration()) 
+  //         continue;
+  //       // errs() << CurrentCalledFunc->getName() << "\n";
+  //       DependentFunctions[CallingFunc].push_back(CurrentCalledFunc);
+  //       TaintTrackingResult[CallingFunc] = -1;
+  //     }
+  //     // errs() << "\n\n";
+  //   }
+  // }
 
-  while (!FunctionWorkList.empty()) {
-    Function *F = FunctionWorkList.back();
-    FunctionWorkList.pop_back();
+  // while (!FunctionWorkList.empty()) {
+  //   Function *F = FunctionWorkList.back();
+  //   FunctionWorkList.pop_back();
 
-    if (F->isDeclaration())
-      continue;
+  //   if (F->isDeclaration())
+  //     continue;
 
-    if (!PI.runBeforePass<Function>(*this, *F))
-      continue;
+  //   if (!PI.runBeforePass<Function>(*this, *F))
+  //     continue;
 
-    PreservedAnalyses PassPA;
-    {
-      SmallSet<Function *, 8> VisitedFunctions;
-      TimeTraceScope TimeScope(name(), F->getName());
-      PassPA = run(*F, FAM, VisitedFunctions);
-    }
+  //   PreservedAnalyses PassPA;
+  //   {
+  //     SmallSet<Function *, 8> VisitedFunctions;
+  //     TimeTraceScope TimeScope(name(), F->getName());
+  //     PassPA = run(*F, FAM, VisitedFunctions);
+  //   }
 
-    PI.runAfterPass(*this, *F);
+  //   PI.runAfterPass(*this, *F);
 
-    FAM.invalidate(*F, PassPA);
-    PA.intersect(std::move(PassPA));
-  }
+  //   FAM.invalidate(*F, PassPA);
+  //   PA.intersect(std::move(PassPA));
+  // }
 
   return PA;
 
