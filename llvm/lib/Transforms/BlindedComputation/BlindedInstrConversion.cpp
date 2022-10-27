@@ -592,6 +592,18 @@ PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
 
 void BlindedInstrConversionPass::transformer(Module& M, BlindedTaintTracking& BTT) {
   expandBlindedArrayAccesses(M, BTT);
+  for (Function &F : M) {
+    if (F.isDeclaration()) {
+      continue;
+    }
+    linearizeSelectInstructions(F);
+  }
+  // BlindedTaintTracking BTTV = BlindedTaintTracking(M);
+  // BTTV.buildTaintedSet(1, M);
+  // if (BTTV.hasViolation(M)) {
+  //   BTTV.printViolations();
+  //   // llvm_unreachable("validateBlindedData returns 'false'");
+  // }
 }
 
 
@@ -603,7 +615,9 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
   BlindedTaintTracking BTT = BlindedTaintTracking(M);
+
   BTT.buildTaintedSet(0, M);
+
   transformer(M, BTT);
   // errs() << "finished building TT...\n";
 

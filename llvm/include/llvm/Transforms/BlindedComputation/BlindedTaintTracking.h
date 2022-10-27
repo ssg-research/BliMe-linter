@@ -42,8 +42,12 @@ public:
 
 	// iteration: the max time of function cloning
 	void buildTaintedSet(int iteration, Module& M);
+	void clearResults();
+	void clearInstrConvSet();
+	bool hasViolation(Module& M);
 	void markInstrsForConversion(bool clear = false);
 	void printInstrsForConversion();
+	void printViolations();
 
 	// We assume the programmer will use these sets directly
 	std::set<const Value*> TaintedValues;
@@ -61,8 +65,6 @@ private:
 	std::vector<const SVF::VFGNode*> TaintSource;
 
 	bool addTaintedValue(const Value* V);
-	void clearResults();
-	void clearInstrConvSet();
 
 	// This function builds worklist to be propagated
 	void extractTaintSource(Function &F);

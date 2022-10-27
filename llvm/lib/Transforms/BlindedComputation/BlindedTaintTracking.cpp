@@ -11,15 +11,39 @@ void BlindedTaintTracking::clearResults() {
 	clearInstrConvSet();
 	TaintedValues.clear();
 	TaintSource.clear();
+	InstrsMarked = false;
 }
-
 
 void BlindedTaintTracking::clearInstrConvSet() {
 	BlndBr.clear();
 	BlndMemOp.clear();
 	BlndGep.clear();
 	BlndSelect.clear();
+	InstrsMarked = false;
 }
+
+bool BlindedTaintTracking::hasViolation(Module& M) {
+	markInstrsForConversion();
+	return !(BlndBr.empty() && BlndMemOp.empty());
+}
+
+void BlindedTaintTracking::printViolations() {
+	for (auto Inst : BlndBr) {
+		errs() << "invalid use of blinded data as operand of branchInst!\n";
+		errs() << *Inst << "\n";
+	}
+	for (auto Inst : BlndMemOp) {
+		if (isa<LoadInst>(Inst)) {
+			errs() << "loadInstr with a blinded pointer!\n";
+			errs() << *Inst << "\n";
+		}
+		else if (isa<StoreInst>(Inst)) {
+      errs() << "storeInstr with a blinded pointer!\n";
+			errs() << *Inst << "\n";
+		} 
+	}
+}
+
 
 bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 	if (const Instruction* vInstr = dyn_cast<Instruction>(V)) {
@@ -88,7 +112,8 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 						for (auto valUser : valNode->users()) {
 							const Value* valUserVal = dyn_cast<Value>(valUser);
 							Value* NValUserVal = const_cast<Value*>(valUserVal);
-							if (!isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal)) {
+							if (isa<Instruction>(NValUserVal) 
+									&& !isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
 								const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
 								if (NValUserVal != nullptr) {
 									if (!handledNodes.count({vfgNode, userVFGNode})) {
@@ -115,7 +140,8 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 					for (auto valUser : valNode->users()) {
 						const Value* valUserVal = dyn_cast<Value>(valUser);
 						Value* NValUserVal = const_cast<Value*>(valUserVal);
-						if (!isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal)) {
+						if (isa<Instruction>(NValUserVal) 
+								&& !isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
 							const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
 							if (NValUserVal != nullptr) {
 								if (!handledNodes.count({vfgNode, userVFGNode})) {

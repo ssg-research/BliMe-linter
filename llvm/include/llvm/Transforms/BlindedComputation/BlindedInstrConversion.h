@@ -8,7 +8,35 @@
 #include "llvm/Analysis/BlindedDataUsage.h"
 #include <vector>
 #include <unordered_map>
+#include "llvm/Transforms/BlindedComputation/BlindedTaintTracking.h"
 
+#include "llvm/ADT/SetVector.h"
+#include "llvm/ADT/APInt.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/InstIterator.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/ValueMap.h"
+#include <llvm/IR/DebugLoc.h>
+#include <llvm/IR/DebugInfoMetadata.h>
+#include "llvm/Analysis/TaintTracking.h"
+#include "llvm/Analysis/AddTaintMetadata.h"
+#include "llvm/Analysis/BasicAliasAnalysis.h"
+#include "llvm/Analysis/BlindedDataUsage.h"
+#include "llvm/Analysis/CFLSteensAliasAnalysis.h"
+#include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Analysis/CallGraph.h"
+#include <llvm/IR/DebugLoc.h>
+#include <llvm/IR/DebugInfoMetadata.h>
+#include <unordered_map>
+#include "llvm/Analysis/SVF/WPA/WPAPass.h"
+#include "llvm/Analysis/SVF/WPA/Andersen.h"
+#include "llvm/Analysis/SVF/Util/SVFUtil.h"
+#include "llvm/Analysis/SVF/Util/SVFModule.h"
+#include "llvm/Analysis/SVF/SVF-FE/LLVMUtil.h"
+#include "llvm/Analysis/SVF/SVF-FE/GEPTypeBridgeIterator.h"
+#include "llvm/Analysis/SVF/SVF-FE/PAGBuilder.h"
 
 
 namespace llvm {
@@ -52,6 +80,10 @@ private:
     }
     return Result;
   }
+
+  void transformer(Module& M, BlindedTaintTracking& BTT);
+  void validator(Module &M);
+
   std::vector<Function*> FunctionWorkList;
   std::unordered_map<Function*, SmallPtrSet<Value*, 4>> TaintInfo;
   std::unordered_map<const Function*, std::vector<Function*>> DependentFunctions;
