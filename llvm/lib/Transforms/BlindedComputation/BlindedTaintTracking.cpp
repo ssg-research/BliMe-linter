@@ -108,45 +108,18 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 						if (TaintedValues.count(valNode)) {
 							continue;
 						}
-						addTaintedValue(valNode);
-						for (auto valUser : valNode->users()) {
-							const Value* valUserVal = dyn_cast<Value>(valUser);
-							Value* NValUserVal = const_cast<Value*>(valUserVal);
-							if (isa<Instruction>(NValUserVal) 
-									&& !isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
-								const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
-								if (NValUserVal != nullptr) {
-									if (!handledNodes.count({vfgNode, userVFGNode})) {
-										vfgNodeWorkList.push_back({vfgNode, userVFGNode});
-									}
-								}
-							}
-						}
 					}
 				}
-				// if (const CmpInst* CmpInstr = dyn_cast<CmpInst>(instr)) {
-				// 	addTaintedValue(instr);
-				// 	for (auto CmpUser : valNode->users()) {
-				// 		const Value* CmpUserVal = dyn_cast<Value>(CmpUser);
-				// 		Value* NCmpUserVal = const_cast<Value*>(CmpUserVal);
-				// 		const SVF::VFGNode* CmpVFGNode = LLVMValue2VFGNode(NCmpUserVal);
-				// 		if (CmpVFGNode != nullptr) {
-				// 			vfgNodeWorkList.push_back({vfgNode, CmpVFGNode});
-				// 		}
-				// 	}
-				// }
-				else {
-					addTaintedValue(valNode);
-					for (auto valUser : valNode->users()) {
-						const Value* valUserVal = dyn_cast<Value>(valUser);
-						Value* NValUserVal = const_cast<Value*>(valUserVal);
-						if (isa<Instruction>(NValUserVal) 
-								&& !isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
-							const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
-							if (NValUserVal != nullptr) {
-								if (!handledNodes.count({vfgNode, userVFGNode})) {
-									vfgNodeWorkList.push_back({vfgNode, userVFGNode});
-								}
+				addTaintedValue(valNode);
+				for (auto valUser : valNode->users()) {
+					const Value* valUserVal = dyn_cast<Value>(valUser);
+					Value* NValUserVal = const_cast<Value*>(valUserVal);
+					if (isa<Instruction>(NValUserVal) 
+							&& !isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
+						const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
+						if (NValUserVal != nullptr) {
+							if (!handledNodes.count({vfgNode, userVFGNode})) {
+								vfgNodeWorkList.push_back({vfgNode, userVFGNode});
 							}
 						}
 					}
@@ -164,7 +137,6 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 				// 	errs() << "VFGFParmNode: " << vfgNode->toString() << "\n" << dstNode->toString() << "\n";
 				// }
 			}
-
 		}
 	}
 	InstrsMarked = false;
