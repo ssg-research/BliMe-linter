@@ -7,8 +7,8 @@
 ; CHECK:         [[INDEXI32:%.*]] = load i32, i32* @key, align 4
 ; CHECK:         [[INDEX:%.*]] = sext i32 [[INDEXI32]] to i64
 ; CHECK-NOT:     getelementptr inbounds [100 x i32], [100 x i32]* @arr, i64 0, i64 {{%.*}}
-; CHECK:         getelementptr inbounds ([100 x i32], [100 x i32]* @arr, i64 0, i64 0), align 4
-; CHECK-NEXT:    br label %[[LOOPBODY:.*]]
+; CHECK:         getelementptr [100 x i32], [100 x i32]* @arr, i64 0, i64 0
+; CHECK:    br label %[[LOOPBODY:.*]]
 
 ; CHECK:       [[LOOPBODY]]:
 ; CHECK-NEXT:    [[INDUCVAR:%.*]] = phi i64 [ 0, [[ENTRY:%.*]] ], [ [[PREVINDUC:%.*]], %[[LOOPBODY]] ]

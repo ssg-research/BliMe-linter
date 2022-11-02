@@ -4,8 +4,8 @@
 
 ; CHECK-LABEL: @accessArray(
 ; CHECK-NOT:     getelementptr inbounds [100 x i8], [100 x i8]* @arr, i64 0, i64 {{%.*}}
-; CHECK:         getelementptr inbounds ([100 x i8], [100 x i8]* @arr, i64 0, i64 0), align 1
-; CHECK-NEXT:    br label %[[LOOPBODY:.*]]
+; CHECK:         getelementptr [100 x i8], [100 x i8]* @arr, i64 0, i64 0
+; CHECK:    br label %[[LOOPBODY:.*]]
 
 ; CHECK:       [[LOOPBODY]]:
 ; CHECK-NEXT:    [[INDUCVAR:%.*]] = phi i64 [ 0, [[ENTRY:%.*]] ], [ [[PREVINDUC:%.*]], %[[LOOPBODY]] ]
