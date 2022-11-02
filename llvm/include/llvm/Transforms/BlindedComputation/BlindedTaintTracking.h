@@ -23,6 +23,18 @@
 
 namespace llvm {
 
+class TaintResult {
+public:
+	std::vector<const Value*> BlndBr;
+	std::vector<const Value*> BlndGep;
+	std::vector<const Value*> BlndMemOp;
+	std::vector<const Value*> BlndSelect;
+	std::set<const Value*> TaintedValues;
+
+	void clearResults();
+
+};
+
 class BlindedTaintTracking {
 public:
 	// Constructor(s): initializes SVF
@@ -30,37 +42,16 @@ public:
 	SVF::PAG* pag;
 	SVF::SVFG* svfg;
 
-	BlindedTaintTracking(Module &M) {
-		SVF::SVFModule* svfModule = SVF::LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(M);
-		SVF::PAGBuilder pagBuilder;
-		pag = pagBuilder.build(svfModule);
-		ander = new SVF::Andersen(pag);
-		ander->analyze();
-		SVF::SVFGBuilder svfBuilder(true);
-		svfg = svfBuilder.buildFullSVFGWithoutOPT(ander);
-	}
-
-	// iteration: the max time of function cloning
-	void buildTaintedSet(int iteration, Module& M);
-	void clearResults();
-	void clearInstrConvSet();
-	bool hasViolation(Module& M);
-	void markInstrsForConversion(bool clear = false);
-	void printInstrsForConversion();
-	void printViolations();
+	TaintResult& getResult(Module& M);
+	void invalidate();
 
 	// We assume the programmer will use these sets directly
-	std::set<const Value*> TaintedValues;
-	std::vector<const Value*> BlndBr;
-	std::vector<const Value*> BlndGep;
-	std::vector<const Value*> BlndMemOp;
-	std::vector<const Value*> BlndSelect;
+	TaintResult Result = TaintResult();
 
-	std::vector<const Value*> PolicyViolations;
 
 private:
 
-	bool InstrsMarked = false;
+	bool ResultCached = false;
 	// Store the tainted llvm value
 	std::vector<const SVF::VFGNode*> TaintSource;
 
@@ -70,13 +61,21 @@ private:
 	void extractTaintSource(Function &F);
 	void extractTaintSource(Module &M);
 
-	// void taintTrackingValueNode(Value* value, std::vector<const SVF::VFGNode*>& vfgNodeWorkList, std::vector<const Value*>& llvmValueWorkList);
-	// void taintTrackingVFGNode(SVF::VFGNode* vfgNode, std::vector<const SVF::VFGNode*>& vfgNodeWorkList, std::vector<const Value*>& llvmValueWorkList);
-
 	const SVF::VFGNode* LLVMValue2VFGNode(Value* value);
 	const Value* VFGNode2LLVMValue(const SVF::SVFGNode* node); 
 
+	bool DefUsePropagate(const SVF::VFGNode* vfgNode);
+	bool SVFGPropagate(const SVF::VFGNode* vfgNode);
 
+	void buildSVFG(Module &M);
+	// iteration: the max time of function cloning
+	void buildTaintedSet(int iteration, Module& M);
+	void clearResults();
+	bool hasViolation(Module& M);
+	void markInstrsForConversion(bool clear = false);
+	void printInstrsForConversion();
+	void printViolations();
+	void releaseSVFG();
 };
 
 } // namespace llvm

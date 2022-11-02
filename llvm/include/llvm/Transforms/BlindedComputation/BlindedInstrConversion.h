@@ -30,13 +30,6 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <unordered_map>
-#include "llvm/Analysis/SVF/WPA/WPAPass.h"
-#include "llvm/Analysis/SVF/WPA/Andersen.h"
-#include "llvm/Analysis/SVF/Util/SVFUtil.h"
-#include "llvm/Analysis/SVF/Util/SVFModule.h"
-#include "llvm/Analysis/SVF/SVF-FE/LLVMUtil.h"
-#include "llvm/Analysis/SVF/SVF-FE/GEPTypeBridgeIterator.h"
-#include "llvm/Analysis/SVF/SVF-FE/PAGBuilder.h"
 
 
 namespace llvm {
@@ -81,7 +74,7 @@ private:
     return Result;
   }
 
-  void transformer(Module& M, BlindedTaintTracking& BTT);
+  void transformer(Module& M, TaintResult& TR);
   void validator(Module &M);
 
   std::vector<Function*> FunctionWorkList;

@@ -7,32 +7,59 @@ using namespace llvm;
 // Current solution is to leave the task of differentiating different
 // cases to the validate/transform
 
-void BlindedTaintTracking::clearResults() {
-	clearInstrConvSet();
-	TaintedValues.clear();
-	TaintSource.clear();
-	InstrsMarked = false;
-}
-
-void BlindedTaintTracking::clearInstrConvSet() {
+void TaintResult::clearResults() {
 	BlndBr.clear();
 	BlndMemOp.clear();
 	BlndGep.clear();
 	BlndSelect.clear();
-	InstrsMarked = false;
+}
+
+bool BlindedTaintTracking::DefUsePropagate(const SVF::VFGNode* vfgNode) {
+	const Value* valNode = VFGNode2LLVMValue(vfgNode);
+	if (valNode == nullptr) {
+		return false;
+	}
+	else if (SVF::SVFUtil::isa<SVF::FormalParmVFGNode>(vfgNode)) {
+		if (valNode->getType()->isPointerTy()) {
+			return false;
+		}
+		return true;
+	}
+	return true;
+}
+
+
+void BlindedTaintTracking::buildSVFG(Module &M) {
+	SVF::SVFModule* svfModule = SVF::LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(M);
+	SVF::PAGBuilder pagBuilder;
+	pag = pagBuilder.build(svfModule);
+	ander = new SVF::Andersen(pag);
+	ander->analyze();
+	SVF::SVFGBuilder svfBuilder(true);
+	svfg = svfBuilder.buildFullSVFGWithoutOPT(ander);
+}
+
+void BlindedTaintTracking::releaseSVFG() {
+	SVF::LLVMModuleSet::releaseLLVMModuleSet();
+	SVF::PAG::releasePAG();
+}
+
+void BlindedTaintTracking::clearResults() {
+	Result.TaintedValues.clear();
+	TaintSource.clear();
 }
 
 bool BlindedTaintTracking::hasViolation(Module& M) {
 	markInstrsForConversion();
-	return !(BlndBr.empty() && BlndMemOp.empty());
+	return !(Result.BlndBr.empty() && Result.BlndMemOp.empty());
 }
 
 void BlindedTaintTracking::printViolations() {
-	for (auto Inst : BlndBr) {
+	for (auto Inst : Result.BlndBr) {
 		errs() << "invalid use of blinded data as operand of branchInst!\n";
 		errs() << *Inst << "\n";
 	}
-	for (auto Inst : BlndMemOp) {
+	for (auto Inst : Result.BlndMemOp) {
 		if (isa<LoadInst>(Inst)) {
 			errs() << "loadInstr with a blinded pointer!\n";
 			errs() << *Inst << "\n";
@@ -46,18 +73,19 @@ void BlindedTaintTracking::printViolations() {
 
 
 bool BlindedTaintTracking::addTaintedValue(const Value* V) {
+	if (Result.TaintedValues.count(V)) {
+		return false;
+	}
+	Result.TaintedValues.insert(V);
 	if (const Instruction* vInstr = dyn_cast<Instruction>(V)) {
-		if (TaintedValues.count(V)) {
-			return false;
-		}
-		TaintedValues.insert(V);
+
 		LLVMContext &cont = vInstr->getContext();
 		MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
 		const_cast<Instruction*>(vInstr)->setMetadata("my.md.blindedNTT", N);
-		return true;
 	}
-	errs() << "While handling value: " << V << "\n"; 
-	assert(false && "Trying give a non-instr blinded attribute\n");
+	return true;
+	// errs() << "While handling value: " << V << "\n"; 
+	// assert(false && "Trying give a non-instr blinded attribute\n");
 }
 
 
@@ -90,37 +118,40 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 			errs() << "ValNode is nullptr " << "\n"; 
 		}
 
+
 		if (valNode != nullptr){
-			if (const Instruction* instr = dyn_cast<Instruction>(valNode)) {
-				if (const LoadInst* LI = dyn_cast<LoadInst>(valNode)) {
+			if (SVF::SVFUtil::isa<SVF::FormalParmVFGNode>(vfgNode)) {
+
+			}
+			if (const LoadInst* LI = dyn_cast<LoadInst>(valNode)) {
 					const Value *PO = LI->getPointerOperand();
 
 					// check if blinded ptr
 					// PO <- blinded (what now?) <- policy violation? Detect later
 					// LI <- blinded (NOW)       <- not violation
 					// TODO: Write a test to see if it works
+					// PO & LI simultaneously blinded
+					//  %cmp3 = icmp sgt i32 %cond, 10, !dbg !43
+ 					//  %cond5 = select i1 %cmp3, i32* %arraydecay, i32* %arraydecay4
+					//  %1 = load i32 %cond5 
+					//  %cond5 is both a blinded data and pointer to blinded data
+					//  b = arr[%1]
+
 					const Value *predVal = VFGNode2LLVMValue(predVFGNode);	
-					if (PO == predVal && TaintedValues.count(predVal)) {
+					if (PO == predVal && Result.TaintedValues.count(predVal)) {
 						continue;
 					}
-
-					if (PO->getType()->isPointerTy() && !PO->getType()->getContainedType(0)->isPointerTy()) {
-						if (TaintedValues.count(valNode)) {
-							continue;
-						}
-					}
-				}
-				addTaintedValue(valNode);
-				for (auto valUser : valNode->users()) {
-					const Value* valUserVal = dyn_cast<Value>(valUser);
-					Value* NValUserVal = const_cast<Value*>(valUserVal);
-					if (isa<Instruction>(NValUserVal) 
-							&& !isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
-						const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
-						if (NValUserVal != nullptr) {
-							if (!handledNodes.count({vfgNode, userVFGNode})) {
-								vfgNodeWorkList.push_back({vfgNode, userVFGNode});
-							}
+			}
+			addTaintedValue(valNode);
+			for (auto valUser : valNode->users()) {
+				const Value* valUserVal = dyn_cast<Value>(valUser);
+				Value* NValUserVal = const_cast<Value*>(valUserVal);
+				if (isa<Instruction>(NValUserVal) 
+						&& !isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
+					const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
+					if (NValUserVal != nullptr) {
+						if (!handledNodes.count({vfgNode, userVFGNode})) {
+							vfgNodeWorkList.push_back({vfgNode, userVFGNode});
 						}
 					}
 				}
@@ -139,59 +170,41 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 			}
 		}
 	}
-	InstrsMarked = false;
-	printInstrsForConversion();
-	markInstrsForConversion();
 }
 
 void BlindedTaintTracking::markInstrsForConversion(bool clear) {
-	if (clear) {
-		clearInstrConvSet();
-	}
-	else if (InstrsMarked) {
-		return;
-	}
-
-	for (auto Val : TaintedValues) {
+	for (auto Val : Result.TaintedValues) {
 		for (auto U : Val->users()) {
 			auto ValUser = dyn_cast<Instruction>(U);
+			if (!ValUser) {
+				continue;
+			}
 			if (const BranchInst *BrInst = dyn_cast<BranchInst>(ValUser)) {
-				if (BrInst->isConditional() && TaintedValues.count(BrInst->getCondition())){
-					// BranchInst* NBrInst = const_cast<BranchInst*>(BrInst);
-					BlndBr.push_back(BrInst);
+				if (BrInst->isConditional() && Result.TaintedValues.count(BrInst->getCondition())){
+					Result.BlndBr.push_back(BrInst);
 				}
 			}					
 			else if (const LoadInst *LInst = dyn_cast<LoadInst>(ValUser)) {
-				// Load using sensitive value
-				// This is not handled yet. Current implementation actually handles GEP
-				// LoadInst* NLInst = const_cast<LoadInst*>(LInst);
-				BlndMemOp.push_back(LInst);
+				Result.BlndMemOp.push_back(LInst);
 			}
 			else if (const StoreInst *SInst = dyn_cast<StoreInst>(ValUser)) {
-				// Store using sensitive value
-				// This is not handled yet. Current implementation actually handles GEP
-				// StoreInst* NSInst = const_cast<StoreInst*>(SInst);
-				BlndMemOp.push_back(SInst);
+				Result.BlndMemOp.push_back(SInst);
 			}
-			// This is likely to be temporary. 
-			// We will finally handle the memory access only based on l/s instrs
-			// and the def of the pointer operand
 			else if (const GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(ValUser)) {
-				// GetElementPtrInst* NGEPInst = const_cast<GetElementPtrInst*>(GEPInst);
-				BlndGep.push_back(GEPInst);
+				Result.BlndGep.push_back(GEPInst);
 			}
 			else if (const SelectInst* SelInst = dyn_cast<SelectInst>(ValUser)) {
-				BlndSelect.push_back(SelInst);
+				Result.BlndSelect.push_back(SelInst);
 			}
 		}
 	}
-	InstrsMarked = true;
+	ResultCached = true;
 
 }
 
 void BlindedTaintTracking::printInstrsForConversion() {
 	// print instructions that need transformation
-	for (auto instr : TaintedValues) {
+	for (auto instr : Result.TaintedValues) {
 		errs() << *instr << "\n";
 	}
 }
@@ -207,7 +220,7 @@ void BlindedTaintTracking::extractTaintSource(Function &F) {
 			TaintSource.push_back(taintedArg);
 			// if the formal parameter is a non-pointer type, it should also be a tainted value
 			if (!Arg->getType()->isPointerTy()) {
-				TaintedValues.insert(Arg);
+				Result.TaintedValues.insert(Arg);
 			}
 		}
 	}
@@ -289,4 +302,25 @@ const Value* BlindedTaintTracking::VFGNode2LLVMValue(const SVF::SVFGNode* node) 
 		}
 
     return nullptr;
+}
+
+TaintResult& BlindedTaintTracking::getResult(Module& M) {
+	if (ResultCached) {
+		return Result;
+	}
+
+	buildSVFG(M);
+	buildTaintedSet(0, M);
+	markInstrsForConversion();
+
+	ResultCached = true;
+	releaseSVFG();
+
+	return Result;
+
+}
+
+void BlindedTaintTracking::invalidate() {
+	ResultCached =  false;
+	clearResults();
 }

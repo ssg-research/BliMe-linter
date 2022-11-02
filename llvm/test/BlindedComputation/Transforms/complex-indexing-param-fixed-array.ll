@@ -6,8 +6,8 @@
 
 ; CHECK-LABEL: @accessArray(
 ; CHECK-NOT:     getelementptr inbounds [100 x i8], [100 x i8]* @arr, i64 0, i64 {{%.*}}
-; CHECK:         getelementptr [100 x i8], [100 x i8]* @arr, i64 0, i64 0
-; CHECK:    br label {{%.*}}
+; CHECK:         getelementptr inbounds ([100 x i8], [100 x i8]* @arr, i64 0, i64 0), align 1
+; CHECK-NEXT:    br label {{%.*}}
 ; Disable the follwoing since they're incompatible with the select transforms
 ; DIABLE-CHECK:         [[RET:%.*]] = select i1 {{%.*}}, i8 {{%.*}}, i8 {{%.*}}
 ; DIABLE-CHECK:         ret i8 [[RET]]
