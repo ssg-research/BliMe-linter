@@ -28,6 +28,8 @@ MODULE_ANALYSIS("verify", VerifierAnalysis())
 MODULE_ANALYSIS("pass-instrumentation", PassInstrumentationAnalysis(PIC))
 MODULE_ANALYSIS("asan-globals-md", ASanGlobalsMetadataAnalysis())
 MODULE_ANALYSIS("inline-advisor", InlineAdvisorAnalysis())
+MODULE_ANALYSIS("blinded-data-verify", BlindedDataUsageAnalysis())
+MODULE_ANALYSIS("blinded-taint-tracking", BlindedTaintTracking())
 
 #ifndef MODULE_ALIAS_ANALYSIS
 #define MODULE_ALIAS_ANALYSIS(NAME, CREATE_PASS)                               \
@@ -96,6 +98,7 @@ MODULE_PASS("kasan-module", ModuleAddressSanitizerPass(/*CompileKernel=*/true, f
 MODULE_PASS("sancov-module", ModuleSanitizerCoveragePass())
 MODULE_PASS("poison-checking", PoisonCheckingPass())
 MODULE_PASS("blinded-instr-conv", BlindedInstrConversionPass())
+MODULE_PASS("print<blinded-data-usage>", BlindedDataUsagePrinterPass(dbgs()))
 #undef MODULE_PASS
 
 #ifndef CGSCC_ANALYSIS
@@ -149,7 +152,6 @@ FUNCTION_ANALYSIS("targetir",
 FUNCTION_ANALYSIS("verify", VerifierAnalysis())
 FUNCTION_ANALYSIS("pass-instrumentation", PassInstrumentationAnalysis(PIC))
 FUNCTION_ANALYSIS("taint-tracking", TaintTrackingAnalysis())
-FUNCTION_ANALYSIS("blinded-data-verify", BlindedDataUsageAnalysis())
 
 #ifndef FUNCTION_ALIAS_ANALYSIS
 #define FUNCTION_ALIAS_ANALYSIS(NAME, CREATE_PASS)                             \
@@ -170,7 +172,6 @@ FUNCTION_ALIAS_ANALYSIS("type-based-aa", TypeBasedAA())
 FUNCTION_PASS("aa-eval", AAEvaluator())
 FUNCTION_PASS("adce", ADCEPass())
 FUNCTION_PASS("add-discriminators", AddDiscriminatorsPass())
-FUNCTION_PASS("add-taint", AddTaintMetadata())
 FUNCTION_PASS("aggressive-instcombine", AggressiveInstCombinePass())
 FUNCTION_PASS("assume-builder", AssumeBuilderPass())
 FUNCTION_PASS("assume-simplify", AssumeSimplifyPass())
@@ -247,7 +248,6 @@ FUNCTION_PASS("print<scalar-evolution>", ScalarEvolutionPrinterPass(dbgs()))
 FUNCTION_PASS("print<stack-safety-local>", StackSafetyPrinterPass(dbgs()))
 FUNCTION_PASS("print-predicateinfo", PredicateInfoPrinterPass(dbgs()))
 FUNCTION_PASS("print<taint-tracking>", TaintTrackingPrinterPass(dbgs()))
-FUNCTION_PASS("print<blinded-data-usage>", BlindedDataUsagePrinterPass(dbgs()))
 FUNCTION_PASS("reassociate", ReassociatePass())
 FUNCTION_PASS("scalarizer", ScalarizerPass())
 FUNCTION_PASS("sccp", SCCPPass())

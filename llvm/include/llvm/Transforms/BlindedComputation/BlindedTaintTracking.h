@@ -4,7 +4,6 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Analysis/TaintTracking.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
-#include "llvm/Analysis/BlindedDataUsage.h"
 
 #include "llvm/Analysis/SVF/Graphs/VFG.h"
 #include "llvm/Analysis/SVF/WPA/WPAPass.h"
@@ -35,19 +34,21 @@ public:
 
 };
 
-class BlindedTaintTracking {
+class BlindedTaintTracking : public AnalysisInfoMixin<BlindedTaintTracking> {
+	friend AnalysisInfoMixin<BlindedTaintTracking>;
+	static AnalysisKey Key;
 public:
 	// Constructor(s): initializes SVF
+	using Result = TaintResult;
 	SVF::Andersen* ander;
 	SVF::PAG* pag;
 	SVF::SVFG* svfg;
 
-	TaintResult& getResult(Module& M);
-	void invalidate();
+	Result run(Module& M, ModuleAnalysisManager &AM);
+	// void invalidate();
 
 	// We assume the programmer will use these sets directly
-	TaintResult Result = TaintResult();
-
+	Result TResult = TaintResult();
 
 private:
 

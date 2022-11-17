@@ -202,38 +202,38 @@ static bool expandBlindedArrayAccesses(Module &M,
   return true;
 }
 
-// Function *BlindedInstrConversionPass::generateBlindedCopy(
-//     Twine &Name, Function &F, ArrayRef<unsigned> ParamNos) {
+Function *BlindedInstrConversionPass::generateBlindedCopy(
+    Twine &Name, Function &F, ArrayRef<unsigned> ParamNos) {
 
-//   ValueMap<const Value *, WeakTrackingVH> Map;
+  ValueMap<const Value *, WeakTrackingVH> Map;
 
-//   const auto *const OrigFuncTy = F.getFunctionType();
+  const auto *const OrigFuncTy = F.getFunctionType();
 
-//   std::vector<Type *> ArgTypes;
-//   for (const Argument &I : F.args())
-//     ArgTypes.push_back(I.getType());
+  std::vector<Type *> ArgTypes;
+  for (const Argument &I : F.args())
+    ArgTypes.push_back(I.getType());
 
-//   auto *FTy = FunctionType::get(OrigFuncTy->getReturnType(), ArgTypes,
-//                                 OrigFuncTy->isVarArg());
+  auto *FTy = FunctionType::get(OrigFuncTy->getReturnType(), ArgTypes,
+                                OrigFuncTy->isVarArg());
 
-//   auto *NewF = Function::Create(FTy, F.getLinkage(), F.getAddressSpace(), Name,
-//                                 F.getParent());
+  auto *NewF = Function::Create(FTy, F.getLinkage(), F.getAddressSpace(), Name,
+                                F.getParent());
 
-//   Function::arg_iterator DestI = NewF->arg_begin();
-//   for (const Argument &I : F.args()) {
-//     DestI->setName(I.getName());
-//     Map[&I] = &*DestI++;
-//   }
+  Function::arg_iterator DestI = NewF->arg_begin();
+  for (const Argument &I : F.args()) {
+    DestI->setName(I.getName());
+    Map[&I] = &*DestI++;
+  }
 
-//   SmallVector<ReturnInst *, 8> Returns;
-//   CloneFunctionInto(NewF, &F, Map, F.getSubprogram() != nullptr, Returns,
-//                     "", nullptr);
+  SmallVector<ReturnInst *, 8> Returns;
+  CloneFunctionInto(NewF, &F, Map, F.getSubprogram() != nullptr, Returns,
+                    "", nullptr);
 
-//   for (unsigned ParamNo : ParamNos)
-//     NewF->addParamAttr(ParamNo, Attribute::Blinded);
+  for (unsigned ParamNo : ParamNos)
+    NewF->addParamAttr(ParamNo, Attribute::Blinded);
 
-//   return NewF;
-// }
+  return NewF;
+}
 
 /// Ensure CallBase calls a function with the ParamNos args blinded
 ///
@@ -549,20 +549,31 @@ bool BlindedInstrConversionPass::linearizeSelectInstructions(Function &F) {
 // }
 
 
-void BlindedInstrConversionPass::transformer(Module& M, TaintResult& RT) {
-  expandBlindedArrayAccesses(M, RT);
+void BlindedInstrConversionPass::transform(Module& M, ModuleAnalysisManager& AM) {
+  auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
+  expandBlindedArrayAccesses(M, TTResult);
   for (Function &F : M) {
     if (F.isDeclaration()) {
       continue;
     }
     linearizeSelectInstructions(F);
   }
-  // BlindedTaintTracking BTTV = BlindedTaintTracking(M);
-  // BTTV.buildTaintedSet(1, M);
-  // if (BTTV.hasViolation(M)) {
-  //   BTTV.printViolations();
-  //   // llvm_unreachable("validateBlindedData returns 'false'");
-  // }
+  AM.invalidate(M, PreservedAnalyses::none());
+}
+
+void BlindedInstrConversionPass::validate(Module& M, ModuleAnalysisManager& AM) {
+  auto &BDU = AM.getResult<BlindedDataUsageAnalysis>(M);
+  // Verify our blinded data usage policies
+  if(!BDU.violations().empty()){
+      for (auto &V : BDU.violations()) {
+        V.first->print(errs());
+        //const llvm::DebugLoc &debugInfo = V.first->getDebugLoc();
+        //errs() << debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
+        errs() << V.second.str().c_str() << "\n";
+      }
+
+      llvm_unreachable("validateBlindedData returns 'false'");
+  }  
 }
 
 
@@ -571,11 +582,19 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   FunctionAnalysisManager &FAM =
       AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
   
+
+  auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
+  // auto FC = BlindedTTFC();
+  // FC.FuncCloning(M, TTResult);
+  // AM.invalidate(M, PreservedAnalyses::none());
+
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
-  BlindedTaintTracking BTT = BlindedTaintTracking();
-  TaintResult TR = BTT.getResult(M);
-  transformer(M, TR);
+  transform(M, AM);
+  // BTT.invalidate();
+  validate(M, AM);
+
+
   // errs() << "finished building TT...\n";
 
   PreservedAnalyses PA = PreservedAnalyses::all();

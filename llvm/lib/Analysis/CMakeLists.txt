@@ -32,7 +32,6 @@ endif()
   
 
 add_llvm_component_library(LLVMAnalysis
-  AddTaintMetadata.cpp
   AliasAnalysis.cpp
   AliasAnalysisEvaluator.cpp
   AliasAnalysisSummary.cpp
@@ -41,7 +40,6 @@ add_llvm_component_library(LLVMAnalysis
   AssumeBundleQueries.cpp
   AssumptionCache.cpp
   BasicAliasAnalysis.cpp
-  BlindedDataUsage.cpp
   BlockFrequencyInfo.cpp
   BlockFrequencyInfoImpl.cpp
   BranchProbabilityInfo.cpp

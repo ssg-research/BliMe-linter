@@ -5,10 +5,12 @@
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/Analysis/TaintTracking.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
-#include "llvm/Analysis/BlindedDataUsage.h"
+#include "llvm/Transforms/BlindedComputation/BlindedDataUsage.h"
 #include <vector>
 #include <unordered_map>
 #include "llvm/Transforms/BlindedComputation/BlindedTaintTracking.h"
+#include "llvm/Transforms/BlindedComputation/FunctionCloning.h"
+
 
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/APInt.h"
@@ -21,9 +23,7 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include "llvm/Analysis/TaintTracking.h"
-#include "llvm/Analysis/AddTaintMetadata.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
-#include "llvm/Analysis/BlindedDataUsage.h"
 #include "llvm/Analysis/CFLSteensAliasAnalysis.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Analysis/CallGraph.h"
@@ -74,8 +74,8 @@ private:
     return Result;
   }
 
-  void transformer(Module& M, TaintResult& TR);
-  void validator(Module &M);
+  void transform(Module& M, ModuleAnalysisManager &AM);
+  void validate(Module &M, ModuleAnalysisManager &AM);
 
   std::vector<Function*> FunctionWorkList;
   std::unordered_map<Function*, SmallPtrSet<Value*, 4>> TaintInfo;
