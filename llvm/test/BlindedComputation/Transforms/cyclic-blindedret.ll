@@ -22,6 +22,7 @@
 ; #define noinline __attribute__((noinline))
 ; #define blinded __attribute__((blinded))
 ; 
+; int sink;
 ; blinded int global_ret_blnd;
 ; int func_A(int non_blnd, blinded int blnd);
 ; int func_B(int non_blnd, blinded int blnd);
@@ -29,47 +30,50 @@
 ; int func_D(int non_blnd, blinded int blnd);
 ; int func_E(int non_blnd, blinded int blnd);
 ; 
-; int func_SELF(unsigned int non_blnd, blinded int blnd) {
+; CHECK-DAG: call i32 @func_SELF({{.*}}), {{.*}} !my.md.blinded
+; noinline int func_SELF(unsigned int non_blnd, blinded int blnd) {
 ;     if (non_blnd == 0) {
 ;         printf("%d", non_blnd);
 ;         return blnd;
 ;     }
-;     return func_SELF(non_blnd - 1, blnd);
+;     sink += non_blnd;
+;     func_SELF(non_blnd + sink, blnd);
+;     printf("%d", non_blnd);
 ; }
 ; 
-; CHECK-DAG: call i32 @func_B(i32 1, i32 2), !my.md.blinded
-; int func_A(blinded int blnd, int non_blnd) {
+; CHECK-DAG: call i32 @func_B(i32 1, i32 2), {{.*}} !my.md.blinded
+; noinline int func_A(blinded int blnd, int non_blnd) {
 ;     printf("%d %d", blnd, non_blnd);
 ;     int blinded_r = func_B(1, 2);
 ;     return global_ret_blnd;
 ; }
 ; 
 ; 
-; CHECK-DAG: call i32 @func_C(i32 3, i32 4), !my.md.blinded
-; CHECK-DAG: call i32 @func_D(i32 7, i32 8), !my.md.blinded
-; int func_B(int non_blnd, blinded int blnd) {
+; CHECK-DAG: call i32 @func_C(i32 3, i32 4), {{.*}} !my.md.blinded
+; CHECK-DAG: call i32 @func_D(i32 7, i32 8), {{.*}} !my.md.blinded
+; noinline int func_B(int non_blnd, blinded int blnd) {
 ;     printf("%d %d", blnd, non_blnd);
 ;     int blinded_r = func_C(3, 4);
 ;     int blinded_r_2 = func_D(7, 8);
 ;     return global_ret_blnd;
 ; }
 ; 
-; CHECK-DAG: call i32 @func_A(i32 5, i32 6), !my.md.blinded
-; int func_C(int non_blnd, blinded int blnd) {
+; CHECK-DAG: call i32 @func_A(i32 5, i32 6), {{.*}} !my.md.blinded
+; noinline int func_C(int non_blnd, blinded int blnd) {
 ;     printf("%d %d", blnd, non_blnd);
 ;     int blinded_r = func_A(5, 6);
 ;     return global_ret_blnd;
 ; }
 ; 
-; CHECK-DAG: call i32 @func_E(i32 9, i32 10), !my.md.blinded
-; int func_D(int non_blnd, blinded int blnd) {
+; CHECK-DAG: call i32 @func_E(i32 9, i32 10), {{.*}} !my.md.blinded
+; noinline int func_D(int non_blnd, blinded int blnd) {
 ;     printf("%d %d", blnd, non_blnd);
 ;     int blinded_r = func_E(9, 10);
 ;     return global_ret_blnd;
 ; }
 ; 
-; CHECK-DAG: call i32 @func_B(i32 11, i32 12), !my.md.blinded
-; int func_E(int non_blnd, blinded int blnd) {
+; CHECK-DAG: call i32 @func_B(i32 11, i32 12), {{.*}} !my.md.blinded
+; noinline int func_E(int non_blnd, blinded int blnd) {
 ;     printf("%d %d", blnd, non_blnd);
 ;     int blinded_r = func_B(11, 12);
 ;     return global_ret_blnd;
@@ -111,241 +115,210 @@ define dso_local void @doNothingIntP(i32* nocapture) {
 }
 
 @.str = private unnamed_addr constant [3 x i8] c"%d\00", align 1
+@sink = dso_local local_unnamed_addr global i32 0, align 4, !dbg !0
 @.str.1 = private unnamed_addr constant [6 x i8] c"%d %d\00", align 1
-@global_ret_blnd = dso_local local_unnamed_addr global i32 0, align 4, !dbg !0 #0
+@global_ret_blnd = dso_local local_unnamed_addr global i32 0, align 4, !dbg !6 #0
 
-; Function Attrs: nofree nounwind uwtable
-define dso_local i32 @func_SELF(i32 %non_blnd, i32 blinded %blnd) local_unnamed_addr #1 !dbg !11 {
+; Function Attrs: nofree noinline nounwind uwtable
+define dso_local i32 @func_SELF(i32 %non_blnd, i32 blinded returned %blnd) local_unnamed_addr #1 !dbg !13 {
 entry:
-  call void @llvm.dbg.value(metadata i32 undef, metadata !16, metadata !DIExpression()), !dbg !18
-  call void @llvm.dbg.value(metadata i32 undef, metadata !17, metadata !DIExpression()), !dbg !18
-  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 0), !dbg !19
-  ret i32 %blnd, !dbg !22
+  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !18, metadata !DIExpression()), !dbg !20
+  call void @llvm.dbg.value(metadata i32 %blnd, metadata !19, metadata !DIExpression()), !dbg !20
+  %cmp = icmp eq i32 %non_blnd, 0, !dbg !21
+  br i1 %cmp, label %if.then, label %if.end, !dbg !23
+
+if.then:                                          ; preds = %entry
+  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 0), !dbg !24
+  ret i32 %blnd, !dbg !26
+
+if.end:                                           ; preds = %entry
+  %0 = load i32, i32* @sink, align 4, !dbg !27, !tbaa !28
+  %add = add i32 %0, %non_blnd, !dbg !27
+  store i32 %add, i32* @sink, align 4, !dbg !27, !tbaa !28
+  %add1 = add i32 %add, %non_blnd, !dbg !32
+  %call2 = tail call i32 @func_SELF(i32 %add1, i32 %blnd), !dbg !33
+  %call3 = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 %non_blnd), !dbg !34
+  ret i32 %blnd, !dbg !26
 }
 
 ; Function Attrs: nofree nounwind
 declare dso_local i32 @printf(i8* nocapture readonly, ...) local_unnamed_addr #2
 
-; Function Attrs: nofree nounwind uwtable
-define dso_local i32 @func_A(i32 blinded %blnd, i32 %non_blnd) local_unnamed_addr #1 !dbg !23 {
+; Function Attrs: nofree noinline nounwind uwtable
+define dso_local i32 @func_A(i32 blinded %blnd, i32 %non_blnd) local_unnamed_addr #1 !dbg !35 {
 entry:
-  call void @llvm.dbg.value(metadata i32 %blnd, metadata !27, metadata !DIExpression()), !dbg !30
-  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !28, metadata !DIExpression()), !dbg !30
-  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !31
-  %call1 = tail call i32 @func_B(i32 1, i32 2), !dbg !32
-  call void @llvm.dbg.value(metadata i32 %call1, metadata !29, metadata !DIExpression()), !dbg !30
-  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !33, !tbaa !34
-  ret i32 %0, !dbg !38
+  call void @llvm.dbg.value(metadata i32 %blnd, metadata !39, metadata !DIExpression()), !dbg !42
+  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !40, metadata !DIExpression()), !dbg !42
+  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !43
+  %call1 = tail call i32 @func_B(i32 1, i32 2), !dbg !44
+  call void @llvm.dbg.value(metadata i32 %call1, metadata !41, metadata !DIExpression()), !dbg !42
+  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !45, !tbaa !28
+  ret i32 %0, !dbg !46
+}
+
+; Function Attrs: nofree noinline nounwind uwtable
+define dso_local i32 @func_B(i32 %non_blnd, i32 blinded %blnd) local_unnamed_addr #1 !dbg !47 {
+entry:
+  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !49, metadata !DIExpression()), !dbg !53
+  call void @llvm.dbg.value(metadata i32 %blnd, metadata !50, metadata !DIExpression()), !dbg !53
+  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !54
+  %call1 = tail call i32 @func_C(i32 3, i32 4), !dbg !55
+  call void @llvm.dbg.value(metadata i32 %call1, metadata !51, metadata !DIExpression()), !dbg !53
+  %call2 = tail call i32 @func_D(i32 7, i32 8), !dbg !56
+  call void @llvm.dbg.value(metadata i32 %call2, metadata !52, metadata !DIExpression()), !dbg !53
+  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !57, !tbaa !28
+  ret i32 %0, !dbg !58
+}
+
+; Function Attrs: nofree noinline nounwind uwtable
+define dso_local i32 @func_C(i32 %non_blnd, i32 blinded %blnd) local_unnamed_addr #1 !dbg !59 {
+entry:
+  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !61, metadata !DIExpression()), !dbg !64
+  call void @llvm.dbg.value(metadata i32 %blnd, metadata !62, metadata !DIExpression()), !dbg !64
+  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !65
+  %call1 = tail call i32 @func_A(i32 5, i32 6), !dbg !66
+  call void @llvm.dbg.value(metadata i32 %call1, metadata !63, metadata !DIExpression()), !dbg !64
+  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !67, !tbaa !28
+  ret i32 %0, !dbg !68
+}
+
+; Function Attrs: nofree noinline nounwind uwtable
+define dso_local i32 @func_D(i32 %non_blnd, i32 blinded %blnd) local_unnamed_addr #1 !dbg !69 {
+entry:
+  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !71, metadata !DIExpression()), !dbg !74
+  call void @llvm.dbg.value(metadata i32 %blnd, metadata !72, metadata !DIExpression()), !dbg !74
+  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !75
+  %call1 = tail call i32 @func_E(i32 9, i32 10), !dbg !76
+  call void @llvm.dbg.value(metadata i32 %call1, metadata !73, metadata !DIExpression()), !dbg !74
+  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !77, !tbaa !28
+  ret i32 %0, !dbg !78
+}
+
+; Function Attrs: nofree noinline nounwind uwtable
+define dso_local i32 @func_E(i32 %non_blnd, i32 blinded %blnd) local_unnamed_addr #1 !dbg !79 {
+entry:
+  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !81, metadata !DIExpression()), !dbg !84
+  call void @llvm.dbg.value(metadata i32 %blnd, metadata !82, metadata !DIExpression()), !dbg !84
+  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !85
+  %call1 = tail call i32 @func_B(i32 11, i32 12), !dbg !86
+  call void @llvm.dbg.value(metadata i32 %call1, metadata !83, metadata !DIExpression()), !dbg !84
+  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !87, !tbaa !28
+  ret i32 %0, !dbg !88
 }
 
 ; Function Attrs: nofree nounwind uwtable
-define dso_local i32 @func_B(i32 %non_blnd, i32 blinded %blnd) local_unnamed_addr #1 !dbg !39 {
+define dso_local i32 @main() local_unnamed_addr #3 !dbg !89 {
 entry:
-  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !41, metadata !DIExpression()), !dbg !45
-  call void @llvm.dbg.value(metadata i32 %blnd, metadata !42, metadata !DIExpression()), !dbg !45
-  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !46
-  call void @llvm.dbg.value(metadata i32 3, metadata !47, metadata !DIExpression()) #4, !dbg !52
-  call void @llvm.dbg.value(metadata i32 4, metadata !50, metadata !DIExpression()) #4, !dbg !52
-  %call.i = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 4, i32 3) #4, !dbg !54
-  call void @llvm.dbg.value(metadata i32 5, metadata !27, metadata !DIExpression()) #4, !dbg !55
-  call void @llvm.dbg.value(metadata i32 6, metadata !28, metadata !DIExpression()) #4, !dbg !55
-  %call.i.i = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 5, i32 6) #4, !dbg !57
-  %call1.i.i = tail call i32 @func_B(i32 1, i32 2) #4, !dbg !58
-  call void @llvm.dbg.value(metadata i32 %call1.i.i, metadata !29, metadata !DIExpression()) #4, !dbg !55
-  call void @llvm.dbg.value(metadata i32 undef, metadata !51, metadata !DIExpression()) #4, !dbg !52
-  call void @llvm.dbg.value(metadata i32 undef, metadata !43, metadata !DIExpression()), !dbg !45
-  call void @llvm.dbg.value(metadata i32 7, metadata !59, metadata !DIExpression()) #4, !dbg !64
-  call void @llvm.dbg.value(metadata i32 8, metadata !62, metadata !DIExpression()) #4, !dbg !64
-  %call.i3 = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 8, i32 7) #4, !dbg !66
-  call void @llvm.dbg.value(metadata i32 9, metadata !67, metadata !DIExpression()) #4, !dbg !72
-  call void @llvm.dbg.value(metadata i32 10, metadata !70, metadata !DIExpression()) #4, !dbg !72
-  %call.i.i4 = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 10, i32 9) #4, !dbg !74
-  %call1.i.i5 = tail call i32 @func_B(i32 11, i32 12) #4, !dbg !75
-  call void @llvm.dbg.value(metadata i32 %call1.i.i5, metadata !71, metadata !DIExpression()) #4, !dbg !72
-  call void @llvm.dbg.value(metadata i32 undef, metadata !63, metadata !DIExpression()) #4, !dbg !64
-  call void @llvm.dbg.value(metadata i32 undef, metadata !44, metadata !DIExpression()), !dbg !45
-  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !76, !tbaa !34
-  ret i32 %0, !dbg !77
-}
-
-; Function Attrs: nofree nounwind uwtable
-define dso_local i32 @func_C(i32 %non_blnd, i32 blinded %blnd) local_unnamed_addr #1 !dbg !48 {
-entry:
-  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !47, metadata !DIExpression()), !dbg !78
-  call void @llvm.dbg.value(metadata i32 %blnd, metadata !50, metadata !DIExpression()), !dbg !78
-  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !79
-  call void @llvm.dbg.value(metadata i32 5, metadata !27, metadata !DIExpression()) #4, !dbg !80
-  call void @llvm.dbg.value(metadata i32 6, metadata !28, metadata !DIExpression()) #4, !dbg !80
-  %call.i = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 5, i32 6) #4, !dbg !82
-  %call1.i = tail call i32 @func_B(i32 1, i32 2) #4, !dbg !83
-  call void @llvm.dbg.value(metadata i32 %call1.i, metadata !29, metadata !DIExpression()) #4, !dbg !80
-  call void @llvm.dbg.value(metadata i32 undef, metadata !51, metadata !DIExpression()), !dbg !78
-  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !84, !tbaa !34
-  ret i32 %0, !dbg !85
-}
-
-; Function Attrs: nofree nounwind uwtable
-define dso_local i32 @func_D(i32 %non_blnd, i32 blinded %blnd) local_unnamed_addr #1 !dbg !60 {
-entry:
-  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !59, metadata !DIExpression()), !dbg !86
-  call void @llvm.dbg.value(metadata i32 %blnd, metadata !62, metadata !DIExpression()), !dbg !86
-  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !87
-  call void @llvm.dbg.value(metadata i32 9, metadata !67, metadata !DIExpression()) #4, !dbg !88
-  call void @llvm.dbg.value(metadata i32 10, metadata !70, metadata !DIExpression()) #4, !dbg !88
-  %call.i = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 10, i32 9) #4, !dbg !90
-  %call1.i = tail call i32 @func_B(i32 11, i32 12) #4, !dbg !91
-  call void @llvm.dbg.value(metadata i32 %call1.i, metadata !71, metadata !DIExpression()) #4, !dbg !88
-  call void @llvm.dbg.value(metadata i32 undef, metadata !63, metadata !DIExpression()), !dbg !86
-  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !92, !tbaa !34
-  ret i32 %0, !dbg !93
-}
-
-; Function Attrs: nofree nounwind uwtable
-define dso_local i32 @func_E(i32 %non_blnd, i32 blinded %blnd) local_unnamed_addr #1 !dbg !68 {
-entry:
-  call void @llvm.dbg.value(metadata i32 %non_blnd, metadata !67, metadata !DIExpression()), !dbg !94
-  call void @llvm.dbg.value(metadata i32 %blnd, metadata !70, metadata !DIExpression()), !dbg !94
-  %call = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 %blnd, i32 %non_blnd), !dbg !95
-  %call1 = tail call i32 @func_B(i32 11, i32 12), !dbg !96
-  call void @llvm.dbg.value(metadata i32 %call1, metadata !71, metadata !DIExpression()), !dbg !94
-  %0 = load i32, i32* @global_ret_blnd, align 4, !dbg !97, !tbaa !34
-  ret i32 %0, !dbg !98
-}
-
-; Function Attrs: nofree nounwind uwtable
-define dso_local i32 @main() local_unnamed_addr #1 !dbg !99 {
-entry:
-  call void @llvm.dbg.value(metadata i32 5, metadata !27, metadata !DIExpression()) #4, !dbg !102
-  call void @llvm.dbg.value(metadata i32 7, metadata !28, metadata !DIExpression()) #4, !dbg !102
-  %call.i = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([6 x i8], [6 x i8]* @.str.1, i64 0, i64 0), i32 5, i32 7) #4, !dbg !104
-  %call1.i = tail call i32 @func_B(i32 1, i32 2) #4, !dbg !105
-  call void @llvm.dbg.value(metadata i32 %call1.i, metadata !29, metadata !DIExpression()) #4, !dbg !102
-  call void @llvm.dbg.value(metadata i32 undef, metadata !16, metadata !DIExpression()) #4, !dbg !106
-  call void @llvm.dbg.value(metadata i32 undef, metadata !17, metadata !DIExpression()) #4, !dbg !106
-  %call.i2 = tail call i32 (i8*, ...) @printf(i8* nonnull dereferenceable(1) getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i64 0, i64 0), i32 0) #4, !dbg !108
-  ret i32 0, !dbg !109
+  %call = tail call i32 @func_A(i32 5, i32 7), !dbg !92
+  %call1 = tail call i32 @func_SELF(i32 2, i32 15), !dbg !93
+  ret i32 0, !dbg !94
 }
 
 ; Function Attrs: nounwind readnone speculatable willreturn
-declare void @llvm.dbg.value(metadata, metadata, metadata) #3
+declare void @llvm.dbg.value(metadata, metadata, metadata) #4
 
 attributes #0 = { blinded }
-attributes #1 = { nofree nounwind uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #1 = { nofree noinline nounwind uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #2 = { nofree nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
-attributes #3 = { nounwind readnone speculatable willreturn }
-attributes #4 = { nounwind }
+attributes #3 = { nofree nounwind uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #4 = { nounwind readnone speculatable willreturn }
 
 !llvm.dbg.cu = !{!2}
-!llvm.module.flags = !{!7, !8, !9}
-!llvm.ident = !{!10}
+!llvm.module.flags = !{!9, !10, !11}
+!llvm.ident = !{!12}
 
 !0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
-!1 = distinct !DIGlobalVariable(name: "global_ret_blnd", scope: !2, file: !3, line: 18, type: !6, isLocal: false, isDefinition: true)
+!1 = distinct !DIGlobalVariable(name: "sink", scope: !2, file: !3, line: 18, type: !8, isLocal: false, isDefinition: true)
 !2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 11.0", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5, splitDebugInlining: false, nameTableKind: None)
 !3 = !DIFile(filename: "BlindedComputation/Transforms/cyclic-blindedret.c", directory: "")
 !4 = !{}
-!5 = !{!0}
-!6 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
-!7 = !{i32 7, !"Dwarf Version", i32 4}
-!8 = !{i32 2, !"Debug Info Version", i32 3}
-!9 = !{i32 1, !"wchar_size", i32 4}
-!10 = !{!"clang version 11.0.0"}
-!11 = distinct !DISubprogram(name: "func_SELF", scope: !3, file: !3, line: 26, type: !12, scopeLine: 26, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !15)
-!12 = !DISubroutineType(types: !13)
-!13 = !{!6, !14, !6}
-!14 = !DIBasicType(name: "unsigned int", size: 32, encoding: DW_ATE_unsigned)
-!15 = !{!16, !17}
-!16 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !11, file: !3, line: 26, type: !14)
-!17 = !DILocalVariable(name: "blnd", arg: 2, scope: !11, file: !3, line: 26, type: !6)
-!18 = !DILocation(line: 0, scope: !11)
-!19 = !DILocation(line: 28, column: 9, scope: !20)
-!20 = distinct !DILexicalBlock(scope: !21, file: !3, line: 27, column: 24)
-!21 = distinct !DILexicalBlock(scope: !11, file: !3, line: 27, column: 9)
-!22 = !DILocation(line: 32, column: 1, scope: !11)
-!23 = distinct !DISubprogram(name: "func_A", scope: !3, file: !3, line: 35, type: !24, scopeLine: 35, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !26)
-!24 = !DISubroutineType(types: !25)
-!25 = !{!6, !6, !6}
-!26 = !{!27, !28, !29}
-!27 = !DILocalVariable(name: "blnd", arg: 1, scope: !23, file: !3, line: 35, type: !6)
-!28 = !DILocalVariable(name: "non_blnd", arg: 2, scope: !23, file: !3, line: 35, type: !6)
-!29 = !DILocalVariable(name: "blinded_r", scope: !23, file: !3, line: 37, type: !6)
-!30 = !DILocation(line: 0, scope: !23)
-!31 = !DILocation(line: 36, column: 5, scope: !23)
-!32 = !DILocation(line: 37, column: 21, scope: !23)
-!33 = !DILocation(line: 38, column: 12, scope: !23)
-!34 = !{!35, !35, i64 0}
-!35 = !{!"int", !36, i64 0}
-!36 = !{!"omnipotent char", !37, i64 0}
-!37 = !{!"Simple C/C++ TBAA"}
-!38 = !DILocation(line: 38, column: 5, scope: !23)
-!39 = distinct !DISubprogram(name: "func_B", scope: !3, file: !3, line: 44, type: !24, scopeLine: 44, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !40)
-!40 = !{!41, !42, !43, !44}
-!41 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !39, file: !3, line: 44, type: !6)
-!42 = !DILocalVariable(name: "blnd", arg: 2, scope: !39, file: !3, line: 44, type: !6)
-!43 = !DILocalVariable(name: "blinded_r", scope: !39, file: !3, line: 46, type: !6)
-!44 = !DILocalVariable(name: "blinded_r_2", scope: !39, file: !3, line: 47, type: !6)
-!45 = !DILocation(line: 0, scope: !39)
-!46 = !DILocation(line: 45, column: 5, scope: !39)
-!47 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !48, file: !3, line: 52, type: !6)
-!48 = distinct !DISubprogram(name: "func_C", scope: !3, file: !3, line: 52, type: !24, scopeLine: 52, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !49)
-!49 = !{!47, !50, !51}
-!50 = !DILocalVariable(name: "blnd", arg: 2, scope: !48, file: !3, line: 52, type: !6)
-!51 = !DILocalVariable(name: "blinded_r", scope: !48, file: !3, line: 54, type: !6)
-!52 = !DILocation(line: 0, scope: !48, inlinedAt: !53)
-!53 = distinct !DILocation(line: 46, column: 21, scope: !39)
-!54 = !DILocation(line: 53, column: 5, scope: !48, inlinedAt: !53)
-!55 = !DILocation(line: 0, scope: !23, inlinedAt: !56)
-!56 = distinct !DILocation(line: 54, column: 21, scope: !48, inlinedAt: !53)
-!57 = !DILocation(line: 36, column: 5, scope: !23, inlinedAt: !56)
-!58 = !DILocation(line: 37, column: 21, scope: !23, inlinedAt: !56)
-!59 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !60, file: !3, line: 59, type: !6)
-!60 = distinct !DISubprogram(name: "func_D", scope: !3, file: !3, line: 59, type: !24, scopeLine: 59, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !61)
-!61 = !{!59, !62, !63}
-!62 = !DILocalVariable(name: "blnd", arg: 2, scope: !60, file: !3, line: 59, type: !6)
-!63 = !DILocalVariable(name: "blinded_r", scope: !60, file: !3, line: 61, type: !6)
-!64 = !DILocation(line: 0, scope: !60, inlinedAt: !65)
-!65 = distinct !DILocation(line: 47, column: 23, scope: !39)
-!66 = !DILocation(line: 60, column: 5, scope: !60, inlinedAt: !65)
-!67 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !68, file: !3, line: 66, type: !6)
-!68 = distinct !DISubprogram(name: "func_E", scope: !3, file: !3, line: 66, type: !24, scopeLine: 66, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !69)
-!69 = !{!67, !70, !71}
-!70 = !DILocalVariable(name: "blnd", arg: 2, scope: !68, file: !3, line: 66, type: !6)
-!71 = !DILocalVariable(name: "blinded_r", scope: !68, file: !3, line: 68, type: !6)
-!72 = !DILocation(line: 0, scope: !68, inlinedAt: !73)
-!73 = distinct !DILocation(line: 61, column: 21, scope: !60, inlinedAt: !65)
-!74 = !DILocation(line: 67, column: 5, scope: !68, inlinedAt: !73)
-!75 = !DILocation(line: 68, column: 21, scope: !68, inlinedAt: !73)
-!76 = !DILocation(line: 48, column: 12, scope: !39)
-!77 = !DILocation(line: 48, column: 5, scope: !39)
-!78 = !DILocation(line: 0, scope: !48)
-!79 = !DILocation(line: 53, column: 5, scope: !48)
-!80 = !DILocation(line: 0, scope: !23, inlinedAt: !81)
-!81 = distinct !DILocation(line: 54, column: 21, scope: !48)
-!82 = !DILocation(line: 36, column: 5, scope: !23, inlinedAt: !81)
-!83 = !DILocation(line: 37, column: 21, scope: !23, inlinedAt: !81)
-!84 = !DILocation(line: 55, column: 12, scope: !48)
-!85 = !DILocation(line: 55, column: 5, scope: !48)
-!86 = !DILocation(line: 0, scope: !60)
-!87 = !DILocation(line: 60, column: 5, scope: !60)
-!88 = !DILocation(line: 0, scope: !68, inlinedAt: !89)
-!89 = distinct !DILocation(line: 61, column: 21, scope: !60)
-!90 = !DILocation(line: 67, column: 5, scope: !68, inlinedAt: !89)
-!91 = !DILocation(line: 68, column: 21, scope: !68, inlinedAt: !89)
-!92 = !DILocation(line: 62, column: 12, scope: !60)
-!93 = !DILocation(line: 62, column: 5, scope: !60)
-!94 = !DILocation(line: 0, scope: !68)
-!95 = !DILocation(line: 67, column: 5, scope: !68)
-!96 = !DILocation(line: 68, column: 21, scope: !68)
-!97 = !DILocation(line: 69, column: 12, scope: !68)
-!98 = !DILocation(line: 69, column: 5, scope: !68)
-!99 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 78, type: !100, scopeLine: 78, flags: DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !4)
-!100 = !DISubroutineType(types: !101)
-!101 = !{!6}
-!102 = !DILocation(line: 0, scope: !23, inlinedAt: !103)
-!103 = distinct !DILocation(line: 79, column: 5, scope: !99)
-!104 = !DILocation(line: 36, column: 5, scope: !23, inlinedAt: !103)
-!105 = !DILocation(line: 37, column: 21, scope: !23, inlinedAt: !103)
-!106 = !DILocation(line: 0, scope: !11, inlinedAt: !107)
-!107 = distinct !DILocation(line: 80, column: 5, scope: !99)
-!108 = !DILocation(line: 28, column: 9, scope: !20, inlinedAt: !107)
-!109 = !DILocation(line: 81, column: 5, scope: !99)
+!5 = !{!0, !6}
+!6 = !DIGlobalVariableExpression(var: !7, expr: !DIExpression())
+!7 = distinct !DIGlobalVariable(name: "global_ret_blnd", scope: !2, file: !3, line: 19, type: !8, isLocal: false, isDefinition: true)
+!8 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
+!9 = !{i32 7, !"Dwarf Version", i32 4}
+!10 = !{i32 2, !"Debug Info Version", i32 3}
+!11 = !{i32 1, !"wchar_size", i32 4}
+!12 = !{!"clang version 11.0.0"}
+!13 = distinct !DISubprogram(name: "func_SELF", scope: !3, file: !3, line: 27, type: !14, scopeLine: 27, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !17)
+!14 = !DISubroutineType(types: !15)
+!15 = !{!8, !16, !8}
+!16 = !DIBasicType(name: "unsigned int", size: 32, encoding: DW_ATE_unsigned)
+!17 = !{!18, !19}
+!18 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !13, file: !3, line: 27, type: !16)
+!19 = !DILocalVariable(name: "blnd", arg: 2, scope: !13, file: !3, line: 27, type: !8)
+!20 = !DILocation(line: 0, scope: !13)
+!21 = !DILocation(line: 28, column: 18, scope: !22)
+!22 = distinct !DILexicalBlock(scope: !13, file: !3, line: 28, column: 9)
+!23 = !DILocation(line: 28, column: 9, scope: !13)
+!24 = !DILocation(line: 29, column: 9, scope: !25)
+!25 = distinct !DILexicalBlock(scope: !22, file: !3, line: 28, column: 24)
+!26 = !DILocation(line: 35, column: 1, scope: !13)
+!27 = !DILocation(line: 32, column: 10, scope: !13)
+!28 = !{!29, !29, i64 0}
+!29 = !{!"int", !30, i64 0}
+!30 = !{!"omnipotent char", !31, i64 0}
+!31 = !{!"Simple C/C++ TBAA"}
+!32 = !DILocation(line: 33, column: 24, scope: !13)
+!33 = !DILocation(line: 33, column: 5, scope: !13)
+!34 = !DILocation(line: 34, column: 5, scope: !13)
+!35 = distinct !DISubprogram(name: "func_A", scope: !3, file: !3, line: 38, type: !36, scopeLine: 38, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !38)
+!36 = !DISubroutineType(types: !37)
+!37 = !{!8, !8, !8}
+!38 = !{!39, !40, !41}
+!39 = !DILocalVariable(name: "blnd", arg: 1, scope: !35, file: !3, line: 38, type: !8)
+!40 = !DILocalVariable(name: "non_blnd", arg: 2, scope: !35, file: !3, line: 38, type: !8)
+!41 = !DILocalVariable(name: "blinded_r", scope: !35, file: !3, line: 40, type: !8)
+!42 = !DILocation(line: 0, scope: !35)
+!43 = !DILocation(line: 39, column: 5, scope: !35)
+!44 = !DILocation(line: 40, column: 21, scope: !35)
+!45 = !DILocation(line: 41, column: 12, scope: !35)
+!46 = !DILocation(line: 41, column: 5, scope: !35)
+!47 = distinct !DISubprogram(name: "func_B", scope: !3, file: !3, line: 47, type: !36, scopeLine: 47, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !48)
+!48 = !{!49, !50, !51, !52}
+!49 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !47, file: !3, line: 47, type: !8)
+!50 = !DILocalVariable(name: "blnd", arg: 2, scope: !47, file: !3, line: 47, type: !8)
+!51 = !DILocalVariable(name: "blinded_r", scope: !47, file: !3, line: 49, type: !8)
+!52 = !DILocalVariable(name: "blinded_r_2", scope: !47, file: !3, line: 50, type: !8)
+!53 = !DILocation(line: 0, scope: !47)
+!54 = !DILocation(line: 48, column: 5, scope: !47)
+!55 = !DILocation(line: 49, column: 21, scope: !47)
+!56 = !DILocation(line: 50, column: 23, scope: !47)
+!57 = !DILocation(line: 51, column: 12, scope: !47)
+!58 = !DILocation(line: 51, column: 5, scope: !47)
+!59 = distinct !DISubprogram(name: "func_C", scope: !3, file: !3, line: 55, type: !36, scopeLine: 55, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !60)
+!60 = !{!61, !62, !63}
+!61 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !59, file: !3, line: 55, type: !8)
+!62 = !DILocalVariable(name: "blnd", arg: 2, scope: !59, file: !3, line: 55, type: !8)
+!63 = !DILocalVariable(name: "blinded_r", scope: !59, file: !3, line: 57, type: !8)
+!64 = !DILocation(line: 0, scope: !59)
+!65 = !DILocation(line: 56, column: 5, scope: !59)
+!66 = !DILocation(line: 57, column: 21, scope: !59)
+!67 = !DILocation(line: 58, column: 12, scope: !59)
+!68 = !DILocation(line: 58, column: 5, scope: !59)
+!69 = distinct !DISubprogram(name: "func_D", scope: !3, file: !3, line: 62, type: !36, scopeLine: 62, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !70)
+!70 = !{!71, !72, !73}
+!71 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !69, file: !3, line: 62, type: !8)
+!72 = !DILocalVariable(name: "blnd", arg: 2, scope: !69, file: !3, line: 62, type: !8)
+!73 = !DILocalVariable(name: "blinded_r", scope: !69, file: !3, line: 64, type: !8)
+!74 = !DILocation(line: 0, scope: !69)
+!75 = !DILocation(line: 63, column: 5, scope: !69)
+!76 = !DILocation(line: 64, column: 21, scope: !69)
+!77 = !DILocation(line: 65, column: 12, scope: !69)
+!78 = !DILocation(line: 65, column: 5, scope: !69)
+!79 = distinct !DISubprogram(name: "func_E", scope: !3, file: !3, line: 69, type: !36, scopeLine: 69, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !80)
+!80 = !{!81, !82, !83}
+!81 = !DILocalVariable(name: "non_blnd", arg: 1, scope: !79, file: !3, line: 69, type: !8)
+!82 = !DILocalVariable(name: "blnd", arg: 2, scope: !79, file: !3, line: 69, type: !8)
+!83 = !DILocalVariable(name: "blinded_r", scope: !79, file: !3, line: 71, type: !8)
+!84 = !DILocation(line: 0, scope: !79)
+!85 = !DILocation(line: 70, column: 5, scope: !79)
+!86 = !DILocation(line: 71, column: 21, scope: !79)
+!87 = !DILocation(line: 72, column: 12, scope: !79)
+!88 = !DILocation(line: 72, column: 5, scope: !79)
+!89 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 81, type: !90, scopeLine: 81, flags: DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !4)
+!90 = !DISubroutineType(types: !91)
+!91 = !{!8}
+!92 = !DILocation(line: 82, column: 5, scope: !89)
+!93 = !DILocation(line: 83, column: 5, scope: !89)
+!94 = !DILocation(line: 84, column: 5, scope: !89)

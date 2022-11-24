@@ -5,9 +5,9 @@
 ; Instead, modify it under /bc/llvm-test and install from there!
 ; 
 
-; CFLAGS: --target=x86_64  -Wall -O2 -Xclang -disable-lifetime-markers  -fno-discard-value-names  -fno-unroll-loops -gdwarf
+; CFLAGS: --target=x86_64  -I/usr/include/x86_64-linux-gnu -Wall -O2 -Xclang -disable-lifetime-markers  -fno-discard-value-names  -fno-unroll-loops -gdwarf
 
-; 
+; XFAIL: *
 ; int arr[100];
 ; 
 ; __attribute__((blinded)) int blind_sink = 0;
@@ -112,7 +112,7 @@ attributes #3 = { nounwind readnone speculatable willreturn }
 !0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
 !1 = distinct !DIGlobalVariable(name: "blind_sink", scope: !2, file: !3, line: 6, type: !8, isLocal: false, isDefinition: true)
 !2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 11.0", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5, splitDebugInlining: false, nameTableKind: None)
-!3 = !DIFile(filename: "BlindedComputation/Transforms/funcgen-return_value_handling.c", directory: "/home/hester/Desktop/bc-llvm/bc/llvm-test")
+!3 = !DIFile(filename: "BlindedComputation/Transforms/funcgen-return_value_handling.c", directory: "")
 !4 = !{}
 !5 = !{!0, !6, !9}
 !6 = !DIGlobalVariableExpression(var: !7, expr: !DIExpression())
