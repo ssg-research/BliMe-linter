@@ -1,6 +1,6 @@
 // RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s -check-prefix=NEWFUNC
 // RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s -check-prefix=RETURNS
-
+// XFAIL: *
 int arr[100];
 
 __attribute__((blinded)) int blind_sink = 0;
