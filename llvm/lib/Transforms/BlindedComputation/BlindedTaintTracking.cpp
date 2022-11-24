@@ -13,6 +13,7 @@ void TaintResult::clearResults() {
 	BlndGep.clear();
 	BlndSelect.clear();
 	TaintedValues.clear();
+	BlindedPtrArg.clear();
 }
 
 void BlindedTaintTracking::clearResults() {
@@ -86,10 +87,17 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 		handledNodes.insert(backPair);
 
 		const Value* valNode = VFGNode2LLVMValue(vfgNode);
-		if (valNode == nullptr) {
-			errs() << "ValNode is nullptr " << "\n"; 
+		const Value* predValNode = nullptr;
+		if (predVFGNode != nullptr) {
+		 predValNode = VFGNode2LLVMValue(predVFGNode);
 		}
-
+		// if (valNode == nullptr) {
+		// 	errs() << "ValNode is nullptr " << "\n"; 
+		// }
+		// const Value* 
+		if (SVF::SVFUtil::isa<SVF::ActualParmSVFGNode>(vfgNode)) {
+			TResult.BlindedPtrArg.insert(valNode);
+		}
 
 		if (valNode != nullptr){
 			propagateDefUse = true;
@@ -115,10 +123,13 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 						propagateDefUse = false;
 					}
 			}
-			if (SVF::SVFUtil::isa<SVF::FormalParmVFGNode>(vfgNode) && valNode->getType()->isPointerTy()) {
+			else if (SVF::SVFUtil::isa<SVF::FormalParmVFGNode>(vfgNode) && valNode->getType()->isPointerTy()) {
 				propagateDefUse = false;
 			}
 			else if (isa<GlobalVariable>(valNode) && valNode->getType()->isPointerTy()) {
+				propagateDefUse = false;
+			}
+			else if (predValNode != nullptr && !TResult.TaintedValues.count(predValNode)) {
 				propagateDefUse = false;
 			}
 			if (propagateDefUse) {

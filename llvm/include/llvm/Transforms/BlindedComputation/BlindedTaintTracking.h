@@ -29,6 +29,7 @@ public:
 	std::vector<const Value*> BlndMemOp;
 	std::vector<const Value*> BlndSelect;
 	std::set<const Value*> TaintedValues;
+	std::set<const Value*> BlindedPtrArg;
 
 	void clearResults();
 

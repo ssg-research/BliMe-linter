@@ -584,9 +584,9 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   
 
   auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
-  // auto FC = BlindedTTFC();
-  // FC.FuncCloning(M, TTResult);
-  // AM.invalidate(M, PreservedAnalyses::none());
+  auto FC = BlindedTTFC();
+  FC.FuncCloning(M, TTResult);
+  AM.invalidate(M, PreservedAnalyses::none());
 
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
