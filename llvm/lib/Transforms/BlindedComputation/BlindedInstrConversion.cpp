@@ -189,7 +189,7 @@ static bool expandBlindedArrayAccesses(Module &M,
 
   for (auto Instr : RT.BlndGep) {
     const GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(Instr);
-    errs() << *Instr;
+    errs() << "expanding gep:" << *Instr << "\n";
     assert(GEPInstr && "failed in conversion from Value* to GEP* in expandBlindedArrayAccesses");
     for (auto Idx = GEPInstr->idx_begin(); Idx != GEPInstr->idx_end(); Idx++) {
       if (RT.TaintedValues.count(*Idx)) {
@@ -551,6 +551,15 @@ bool BlindedInstrConversionPass::linearizeSelectInstructions(Function &F) {
 
 void BlindedInstrConversionPass::transform(Module& M, ModuleAnalysisManager& AM) {
   auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
+  errs() << "\nBefore transformation: \n Tainted Values: \n";
+  // for (auto r : TTResult.BlndGep) {
+  //   errs() << *r << "\n";
+  //   if (const Instruction* vInstr = dyn_cast<Instruction>(r)) {
+  //     LLVMContext &cont = vInstr->getContext();
+  //     MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+  //     const_cast<Instruction*>(vInstr)->setMetadata("my.md.blindedNTT", N);
+	//   }
+  // }
   expandBlindedArrayAccesses(M, TTResult);
   for (Function &F : M) {
     if (F.isDeclaration()) {

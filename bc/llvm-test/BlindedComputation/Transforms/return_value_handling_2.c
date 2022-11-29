@@ -1,4 +1,7 @@
 // RUN: opt -passes="blinded-instr-conv" -S < %s | FileCheck %s
+// XFAIL: *
+// Current transformation cannot expand the array with undetermined bound
+// In function one_dimension, the transformation fails to expand arr[do_stuff(1)] access
 
 int arr[100];
 

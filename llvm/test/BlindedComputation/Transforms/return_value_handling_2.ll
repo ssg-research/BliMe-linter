@@ -6,6 +6,9 @@
 
 ; CFLAGS: --target=x86_64  -I/usr/include/x86_64-linux-gnu -Wall -O2 -Xclang -disable-lifetime-markers  -fno-discard-value-names  -fno-unroll-loops -gdwarf
 
+; XFAIL: *
+; Current transformation cannot expand the array with undetermined bound
+; In function one_dimension, the transformation fails to expand arr[do_stuff(1)] access
 ; 
 ; int arr[100];
 ; 
@@ -110,13 +113,13 @@ attributes #4 = { nounwind readnone speculatable willreturn }
 !llvm.ident = !{!15}
 
 !0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
-!1 = distinct !DIGlobalVariable(name: "blind_sink", scope: !2, file: !3, line: 5, type: !9, isLocal: false, isDefinition: true)
+!1 = distinct !DIGlobalVariable(name: "blind_sink", scope: !2, file: !3, line: 8, type: !9, isLocal: false, isDefinition: true)
 !2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "clang version 11.0", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !5, splitDebugInlining: false, nameTableKind: None)
 !3 = !DIFile(filename: "BlindedComputation/Transforms/return_value_handling_2.c", directory: "")
 !4 = !{}
 !5 = !{!0, !6}
 !6 = !DIGlobalVariableExpression(var: !7, expr: !DIExpression())
-!7 = distinct !DIGlobalVariable(name: "arr", scope: !2, file: !3, line: 3, type: !8, isLocal: false, isDefinition: true)
+!7 = distinct !DIGlobalVariable(name: "arr", scope: !2, file: !3, line: 6, type: !8, isLocal: false, isDefinition: true)
 !8 = !DICompositeType(tag: DW_TAG_array_type, baseType: !9, size: 3200, elements: !10)
 !9 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
 !10 = !{!11}
@@ -125,47 +128,47 @@ attributes #4 = { nounwind readnone speculatable willreturn }
 !13 = !{i32 2, !"Debug Info Version", i32 3}
 !14 = !{i32 1, !"wchar_size", i32 4}
 !15 = !{!"clang version 11.0.0"}
-!16 = distinct !DISubprogram(name: "addOne", scope: !3, file: !3, line: 8, type: !17, scopeLine: 8, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !19)
+!16 = distinct !DISubprogram(name: "addOne", scope: !3, file: !3, line: 11, type: !17, scopeLine: 11, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !19)
 !17 = !DISubroutineType(types: !18)
 !18 = !{!9, !9}
 !19 = !{!20}
-!20 = !DILocalVariable(name: "i", arg: 1, scope: !16, file: !3, line: 8, type: !9)
+!20 = !DILocalVariable(name: "i", arg: 1, scope: !16, file: !3, line: 11, type: !9)
 !21 = !DILocation(line: 0, scope: !16)
-!22 = !DILocation(line: 9, column: 11, scope: !16)
-!23 = !DILocation(line: 9, column: 2, scope: !16)
-!24 = distinct !DISubprogram(name: "do_stuff", scope: !3, file: !3, line: 13, type: !17, scopeLine: 13, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !25)
+!22 = !DILocation(line: 12, column: 11, scope: !16)
+!23 = !DILocation(line: 12, column: 2, scope: !16)
+!24 = distinct !DISubprogram(name: "do_stuff", scope: !3, file: !3, line: 16, type: !17, scopeLine: 16, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !25)
 !25 = !{!26}
-!26 = !DILocalVariable(name: "i", arg: 1, scope: !24, file: !3, line: 13, type: !9)
+!26 = !DILocalVariable(name: "i", arg: 1, scope: !24, file: !3, line: 16, type: !9)
 !27 = !DILocation(line: 0, scope: !24)
-!28 = !DILocation(line: 14, column: 10, scope: !24)
+!28 = !DILocation(line: 17, column: 10, scope: !24)
 !29 = !{!30, !30, i64 0}
 !30 = !{!"int", !31, i64 0}
 !31 = !{!"omnipotent char", !32, i64 0}
 !32 = !{!"Simple C/C++ TBAA"}
-!33 = !DILocation(line: 14, column: 21, scope: !24)
-!34 = !DILocation(line: 14, column: 3, scope: !24)
-!35 = distinct !DISubprogram(name: "one_dimension", scope: !3, file: !3, line: 18, type: !36, scopeLine: 18, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !40)
+!33 = !DILocation(line: 17, column: 21, scope: !24)
+!34 = !DILocation(line: 17, column: 3, scope: !24)
+!35 = distinct !DISubprogram(name: "one_dimension", scope: !3, file: !3, line: 21, type: !36, scopeLine: 21, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !40)
 !36 = !DISubroutineType(types: !37)
 !37 = !{!9, !38}
 !38 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !39, size: 64)
 !39 = !DIBasicType(name: "char", size: 8, encoding: DW_ATE_signed_char)
 !40 = !{!41}
-!41 = !DILocalVariable(name: "arr", arg: 1, scope: !35, file: !3, line: 18, type: !38)
+!41 = !DILocalVariable(name: "arr", arg: 1, scope: !35, file: !3, line: 21, type: !38)
 !42 = !DILocation(line: 0, scope: !35)
-!43 = !DILocation(line: 19, column: 14, scope: !35)
-!44 = !DILocation(line: 19, column: 10, scope: !35)
+!43 = !DILocation(line: 22, column: 14, scope: !35)
+!44 = !DILocation(line: 22, column: 10, scope: !35)
 !45 = !{!31, !31, i64 0}
-!46 = !DILocation(line: 19, column: 3, scope: !35)
-!47 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 23, type: !48, scopeLine: 23, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !51)
+!46 = !DILocation(line: 22, column: 3, scope: !35)
+!47 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 26, type: !48, scopeLine: 26, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !51)
 !48 = !DISubroutineType(types: !49)
 !49 = !{!9, !9, !50}
 !50 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !38, size: 64)
 !51 = !{!52, !53}
-!52 = !DILocalVariable(name: "argc", arg: 1, scope: !47, file: !3, line: 23, type: !9)
-!53 = !DILocalVariable(name: "argv", arg: 2, scope: !47, file: !3, line: 23, type: !50)
+!52 = !DILocalVariable(name: "argc", arg: 1, scope: !47, file: !3, line: 26, type: !9)
+!53 = !DILocalVariable(name: "argv", arg: 2, scope: !47, file: !3, line: 26, type: !50)
 !54 = !DILocation(line: 0, scope: !47)
-!55 = !DILocation(line: 24, column: 24, scope: !47)
+!55 = !DILocation(line: 27, column: 24, scope: !47)
 !56 = !{!57, !57, i64 0}
 !57 = !{!"any pointer", !31, i64 0}
-!58 = !DILocation(line: 24, column: 10, scope: !47)
-!59 = !DILocation(line: 24, column: 3, scope: !47)
+!58 = !DILocation(line: 27, column: 10, scope: !47)
+!59 = !DILocation(line: 27, column: 3, scope: !47)

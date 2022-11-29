@@ -79,7 +79,7 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 		bool propagateDefUse = false;
 
 		vfgNodeWorkList.pop_back();
-		errs() << "handling: " << vfgNode->toString() << "\n";
+		// errs() << "handling: " << vfgNode->toString() << "\n";
 
 		if (handledNodes.count(backPair)) {
 			continue;
@@ -194,16 +194,16 @@ void BlindedTaintTracking::markInstrsForConversion(bool clear) {
 			}
 		}
 	}
-	ResultCached = true;
+	// ResultCached = true;
 
 }
 
 void BlindedTaintTracking::extractTaintSource(Function &F) {
-	errs() << F.getName() << "\n";
+	// errs() << F.getName() << "\n";
 	for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
 		if (Arg->hasAttribute(Attribute::Blinded)) {
 			const SVF::VFGNode* taintedArg = LLVMValue2VFGNode(Arg);
-			errs() << "Marking formal parameter: " << Arg->getName() << "\n";
+			// errs() << "Marking formal parameter: " << Arg->getName() << "\n";
 			assert(taintedArg != nullptr && ("Failed to fetch VFGNode from taintedArg " + Arg->getName().str()).c_str());
 			TaintSource.push_back(taintedArg);
 			// if the formal parameter is a non-pointer type, it should also be a tainted value
@@ -220,7 +220,7 @@ void BlindedTaintTracking::extractTaintSource(Module &M) {
 	for (auto I = GL.begin(), E = GL.end(); I != E; ++I) {
 		GlobalVariable &GV = *I;
 		const SVF::VFGNode* taintedGVNode = LLVMValue2VFGNode(&GV);
-		errs() << "Marking global variable: " << GV.getName() << "\n";
+		// errs() << "Marking global variable: " << GV.getName() << "\n";
 		assert(taintedGVNode != nullptr && ("Failed to fetch VFGNode from taintedGlobal " + GV.getName().str()).c_str());
 		if (GV.hasAttribute(Attribute::Blinded)) {
 			TaintSource.push_back(taintedGVNode);
