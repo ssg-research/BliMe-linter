@@ -13,7 +13,7 @@ void BlindedTTFC::FuncCloning(Module &M, TaintResult& TR) {
     if (F.isDeclaration()) {
       continue;
     }
-    errs() << "Function cloning: checking..." << F.getName() << "\n";
+    // errs() << "Function cloning: checking..." << F.getName() << "\n";
     FuncCloning(F, TR, ander);
   }
 

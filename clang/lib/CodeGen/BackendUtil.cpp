@@ -1377,7 +1377,7 @@ void EmitAssemblyHelper::EmitAssemblyWithNewPassManager(
       addSanitizersAtO0(MPM, TargetTriple, LangOpts, CodeGenOpts);
     }
 
-    MPM.addPass(BlindedInstrConversionPass());
+    // MPM.addPass(BlindedInstrConversionPass());
   }
 
   // FIXME: We still use the legacy pass manager to do code generation. We

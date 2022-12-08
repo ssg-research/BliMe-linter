@@ -189,7 +189,7 @@ static bool expandBlindedArrayAccesses(Module &M,
 
   for (auto Instr : RT.BlndGep) {
     const GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(Instr);
-    errs() << "expanding gep:" << *Instr << "\n";
+    // errs() << "expanding gep:" << *Instr << "\n";
     assert(GEPInstr && "failed in conversion from Value* to GEP* in expandBlindedArrayAccesses");
     for (auto Idx = GEPInstr->idx_begin(); Idx != GEPInstr->idx_end(); Idx++) {
       if (RT.TaintedValues.count(*Idx)) {
@@ -344,7 +344,7 @@ Function *BlindedInstrConversionPass::generateBlindedCopy(
 //             TR.explicitlyTaint(CB);
 //             KeepGoing = true;
 //             break;
-//           } 
+//           }
 //           else if (BlindedParamsNew != BlindedParamsOld) {
 //             errs() << "old: " << "\n";
 //             for (auto num : BlindedParamsOld) {
@@ -451,7 +451,7 @@ bool BlindedInstrConversionPass::linearizeSelectInstructions(Function &F) {
       auto *TmpXorMasked = Builder.CreateAnd(MaskVal, TmpXor);
       auto *TmpResVal = Builder.CreateXor(TmpXorMasked, FalseValue);
       auto *Result = TmpResVal;
-      
+
       if (ResultTypeIsPointer)
         Result = Builder.CreateIntToPtr(TmpResVal, ResultType);
       else if (Result->getType() != S->getType())
@@ -551,23 +551,25 @@ bool BlindedInstrConversionPass::linearizeSelectInstructions(Function &F) {
 
 void BlindedInstrConversionPass::transform(Module& M, ModuleAnalysisManager& AM) {
   auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
-  errs() << "\nBefore transformation: \n Tainted Values: \n";
-  // for (auto r : TTResult.BlndGep) {
-  //   errs() << *r << "\n";
-  //   if (const Instruction* vInstr = dyn_cast<Instruction>(r)) {
-  //     LLVMContext &cont = vInstr->getContext();
-  //     MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
-  //     const_cast<Instruction*>(vInstr)->setMetadata("my.md.blindedNTT", N);
-	//   }
-  // }
+
   expandBlindedArrayAccesses(M, TTResult);
   for (Function &F : M) {
     if (F.isDeclaration()) {
       continue;
     }
+
     linearizeSelectInstructions(F);
   }
+  for (auto I : TTResult.BlndBr) {
+    if (const BranchInst* BrInst = dyn_cast<BranchInst>(I)) {
+      BranchInst* NBrInst = const_cast<BranchInst*>(BrInst);
+      LLVMContext &cont = NBrInst->getContext();
+      MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+      NBrInst->setMetadata("t", N);
+    }
+  }
   AM.invalidate(M, PreservedAnalyses::none());
+
 }
 
 void BlindedInstrConversionPass::validate(Module& M, ModuleAnalysisManager& AM) {
@@ -582,7 +584,7 @@ void BlindedInstrConversionPass::validate(Module& M, ModuleAnalysisManager& AM) 
       }
 
       llvm_unreachable("validateBlindedData returns 'false'");
-  }  
+  }
 }
 
 
@@ -590,7 +592,7 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
                                                   ModuleAnalysisManager &AM) {
   FunctionAnalysisManager &FAM =
       AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
-  
+
 
   auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
   auto FC = BlindedTTFC();
@@ -600,11 +602,10 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
   transform(M, AM);
-  // BTT.invalidate();
   validate(M, AM);
 
 
-  // errs() << "finished building TT...\n";
+  errs() << "finished building TT...\n";
 
   PreservedAnalyses PA = PreservedAnalyses::all();
   // std::unordered_map<const Function*, SmallPtrSet<Value*, 4>> TaintInfo;
@@ -629,12 +630,12 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
 
   //     // errs() << "analyzing: " << CallingFunc->getName() << "\n";
   //     // errs() << CGN->size() << "\n\n";
-      
+
   //     for (unsigned int i = 0; i < CGN->size(); i++) {
   //       Function* CurrentCalledFunc = ((*CGN)[i])->getFunction();
   //       if (!CurrentCalledFunc)
   //         continue;
-  //       if (CurrentCalledFunc->isDeclaration()) 
+  //       if (CurrentCalledFunc->isDeclaration())
   //         continue;
   //       // errs() << CurrentCalledFunc->getName() << "\n";
   //       DependentFunctions[CallingFunc].push_back(CurrentCalledFunc);

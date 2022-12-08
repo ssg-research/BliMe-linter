@@ -219,10 +219,10 @@ void BlindedTaintTracking::extractTaintSource(Module &M) {
 	Module::GlobalListType &GL = M.getGlobalList();
 	for (auto I = GL.begin(), E = GL.end(); I != E; ++I) {
 		GlobalVariable &GV = *I;
-		const SVF::VFGNode* taintedGVNode = LLVMValue2VFGNode(&GV);
-		// errs() << "Marking global variable: " << GV.getName() << "\n";
-		assert(taintedGVNode != nullptr && ("Failed to fetch VFGNode from taintedGlobal " + GV.getName().str()).c_str());
 		if (GV.hasAttribute(Attribute::Blinded)) {
+			const SVF::VFGNode* taintedGVNode = LLVMValue2VFGNode(&GV);
+			// errs() << "Marking global variable: " << GV.getName() << "\n";
+			assert(taintedGVNode != nullptr && ("Failed to fetch VFGNode from taintedGlobal " + GV.getName().str()).c_str());
 			TaintSource.push_back(taintedGVNode);
 		}
 	}
