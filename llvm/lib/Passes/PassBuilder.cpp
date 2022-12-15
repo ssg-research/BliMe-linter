@@ -77,6 +77,7 @@
 #include "llvm/Transforms/BlindedComputation/BlindedInstrConversion.h"
 #include "llvm/Transforms/BlindedComputation/BlindedDataUsage.h"
 #include "llvm/Transforms/BlindedComputation/BlindedTaintTracking.h"
+#include "llvm/Transforms/BlindedComputation/ModifyMetadata.h"
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/ArgumentPromotion.h"
 #include "llvm/Transforms/IPO/Attributor.h"

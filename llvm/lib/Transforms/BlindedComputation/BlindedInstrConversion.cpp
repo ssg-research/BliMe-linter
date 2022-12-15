@@ -21,16 +21,19 @@ void updateGEPAddrUsers(GetElementPtrInst *GEP, Value *NewOperand) {
   // Iterate through all loads that use the GEP address as an operand
   // and iterate through all users of these loads. Replace these loads
   // with our blinded computation safe load
+  // GEP->replaceAllUsesWith(NewOperand);
+  errs() << "op";
   SmallSetVector<Value *, 16> WorkList;
   for (User *GEPUser : GEP->users()) {
-    for (User *U : GEPUser->users()) {
-      for (unsigned int i = 0; i < U->getNumOperands(); ++i) {
-        if (U->getOperand(i) == GEPUser) {
-          U->setOperand(i, NewOperand);
-        }
-      }
+    GEPUser->replaceAllUsesWith(NewOperand);
+    // for (User *U : GEPUser->users()) {
+    //   for (unsigned int i = 0; i < U->getNumOperands(); ++i) {
+    //     if (U->getOperand(i) == GEPUser) {
+    //       U->setOperand(i, NewOperand);
+    //     }
+    //   }
       WorkList.insert(GEPUser);
-    }
+    // }
   }
   // delete old loads from the unsafe GEP
   for (Value *V : WorkList) {
@@ -386,20 +389,7 @@ Function *BlindedInstrConversionPass::generateBlindedCopy(
 //   return wasSet != newVal;
 // }
 
-// static bool markBlindedIfNecessary(Function &F, AAManager::Result &AA, TaintedRegisters &TR) {
-//   auto &TRSet = TR.getTaintedRegisters(&AA);
-//   for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
-//     Instruction &Inst = *I;
-//     if (isa<ReturnInst>(&Inst) && TRSet.contains(&Inst)) {
-//       return changeBlindedFunctionAttr(F, true);
-//     }
-//   }
-//   return changeBlindedFunctionAttr(F, false);
-// }
 
-/// Convert SelectInst to a linearized variant
-//
-//
 bool BlindedInstrConversionPass::linearizeSelectInstructions(Function &F) {
   SmallVector<Instruction*,8> RemoveList;
 
@@ -468,87 +458,6 @@ bool BlindedInstrConversionPass::linearizeSelectInstructions(Function &F) {
   return !RemoveList.empty();
 }
 
-/// This is the entry point for all transforms.
-// bool BlindedInstrConversionPass::runImpl(Function &F,
-//                     AAManager::Result &AA,
-//                     TaintedRegisters &TR,
-//                     BlindedDataUsage &BDU,
-//                     FunctionAnalysisManager &AM,
-//                     SmallSet<Function *, 8> &VisitedFunctions) {
-//   VisitedFunctions.insert(&F);
-
-//   bool MadeChange = false;
-//   // MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
-//   propagateBlindedArgumentFunctionCalls(F, AA, TR, AM, VisitedFunctions);
-//   MadeChange |= expandBlindedArrayAccesses(F, AA, TR);
-//   MadeChange |= markBlindedIfNecessary(F, AA, TR);
-//   MadeChange |= linearizeSelectInstructions(F);
-
-//   // Verify our blinded data usage policies
-//   if(!BDU.validateBlindedData(TR, AA)){
-//       for (auto &V : BDU.violations()) {
-//         V.first->print(errs());
-//         //const llvm::DebugLoc &debugInfo = V.first->getDebugLoc();
-//         //errs() << debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
-//         errs() << V.second.str().c_str() << "\n";
-//       }
-
-//       llvm_unreachable("validateBlindedData returns 'false'");
-//   }
-
-//   VisitedFunctions.erase(&F);
-
-//   return MadeChange;
-// }
-
-// PreservedAnalyses BlindedInstrConversionPass::run(Function &F,
-//                                                   FunctionAnalysisManager &AM,
-//                                                   SmallSet<Function *, 8> &VisitedFunctions) {
-//   errs() << "Running BlindedInstrConversionPass on function: " << F.getName() << "\n";
-//   auto &AAResult = AM.getResult<AAManager>(F);
-//   auto &BasicAAResult = AM.getResult<BasicAA>(F);
-//   auto &SteensAAResult = AM.getResult<CFLSteensAA>(F);
-//   auto &TR = AM.getResult<TaintTrackingAnalysis>(F);
-//   auto &BDU = AM.getResult<BlindedDataUsageAnalysis>(F);
-
-//   // Add result of SteensAA and BasicAA to our AAManager
-//   AAResult.addAAResult(SteensAAResult);
-//   AAResult.addAAResult(BasicAAResult);
-
-//   bool isBlindedBefore = F.hasFnAttribute(Attribute::Blinded);
-
-//   // if (TR.getTaintedRegisters(&AAResult).size() != TaintTrackingResult[&F]) {
-//   //     TaintTrackingResult[&F] = TR.getTaintedRegisters(&AAResult).size();
-//   //     checkAddDependentFunction(&F, VisitedFunctions);
-//   // }
-
-//   int madeChange = runImpl(F, AAResult, TR, BDU, AM, VisitedFunctions);
-
-//   if (!madeChange) {
-//     return PreservedAnalyses::all();
-//   }
-//   else if (isBlindedBefore != F.hasFnAttribute(Attribute::Blinded)) {
-//     checkAddDependentFunction(&F, VisitedFunctions);
-//   }
-
-//   // if (!runImpl(F, AAResult, TR, BDU, AM, VisitedFunctions)) {
-//   //   if (isBlindedBefore != F.hasFnAttribute(Attribute::Blinded)) {
-//   //     checkAddDependentFunction(&F);
-//   //   }
-//   //   // No changes, all analyses are preserved.
-//   //   return PreservedAnalyses::all();
-//   // }
-
-
-//   PreservedAnalyses PA;
-//   PA.preserve<AAManager>();
-//   PA.preserve<BasicAA>();
-//   PA.preserve<CFLSteensAA>();
-
-//   return PA;
-// }
-
-
 void BlindedInstrConversionPass::transform(Module& M, ModuleAnalysisManager& AM) {
   auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
 
@@ -578,12 +487,11 @@ void BlindedInstrConversionPass::validate(Module& M, ModuleAnalysisManager& AM) 
   if(!BDU.violations().empty()){
       for (auto &V : BDU.violations()) {
         V.first->print(errs());
-        //const llvm::DebugLoc &debugInfo = V.first->getDebugLoc();
-        //errs() << debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
+        const llvm::DebugLoc &debugInfo = ((llvm::Instruction*)(V.first))->getDebugLoc();
+        errs() << "\n" <<debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
         errs() << V.second.str().c_str() << "\n";
       }
-
-      llvm_unreachable("validateBlindedData returns 'false'");
+      // llvm_unreachable("validateBlindedData returns 'false'");
   }
 }
 

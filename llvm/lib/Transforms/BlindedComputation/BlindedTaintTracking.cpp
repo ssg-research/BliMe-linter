@@ -53,7 +53,7 @@ bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 		const_cast<Instruction*>(vInstr)->setMetadata("my.md.blindedNTT", N);
 	}
 	return true;
-	// errs() << "While handling value: " << V << "\n"; 
+	// errs() << "While handling value: " << V << "\n";
 	// assert(false && "Trying give a non-instr blinded attribute\n");
 }
 
@@ -92,9 +92,9 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 		 predValNode = VFGNode2LLVMValue(predVFGNode);
 		}
 		// if (valNode == nullptr) {
-		// 	errs() << "ValNode is nullptr " << "\n"; 
+		// 	errs() << "ValNode is nullptr " << "\n";
 		// }
-		// const Value* 
+		// const Value*
 		if (SVF::SVFUtil::isa<SVF::ActualParmSVFGNode>(vfgNode)) {
 			TResult.BlindedPtrArg.insert(valNode);
 		}
@@ -111,11 +111,11 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 					// PO & LI simultaneously blinded
 					//  %cmp3 = icmp sgt i32 %cond, 10, !dbg !43
  					//  %cond5 = select i1 %cmp3, i32* %arraydecay, i32* %arraydecay4
-					//  %1 = load i32 %cond5 
+					//  %1 = load i32 %cond5
 					//  %cond5 is both a blinded data and pointer to blinded data
 					//  b = arr[%1]
 
-					const Value *predVal = VFGNode2LLVMValue(predVFGNode);	
+					const Value *predVal = VFGNode2LLVMValue(predVFGNode);
 					if (PO == predVal && TResult.TaintedValues.count(predVal)) {
 						continue;
 					}
@@ -137,7 +137,7 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 				for (auto valUser : valNode->users()) {
 					const Value* valUserVal = dyn_cast<Value>(valUser);
 					Value* NValUserVal = const_cast<Value*>(valUserVal);
-					if (isa<Instruction>(NValUserVal) 
+					if (isa<Instruction>(NValUserVal)
 							&& !isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
 						const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
 						if (NValUserVal != nullptr) {
@@ -175,7 +175,7 @@ void BlindedTaintTracking::markInstrsForConversion(bool clear) {
 				if (BrInst->isConditional() && TResult.TaintedValues.count(BrInst->getCondition())){
 					TResult.BlndBr.push_back(BrInst);
 				}
-			}					
+			}
 			else if (const LoadInst *LInst = dyn_cast<LoadInst>(ValUser)) {
 				if (TResult.TaintedValues.count(LInst->getPointerOperand())) {
 					TResult.BlndMemOp.push_back(LInst);
@@ -232,11 +232,11 @@ void BlindedTaintTracking::extractTaintSource(Module &M) {
       continue;
     }
     extractTaintSource(F);
-  }	
+  }
 }
 
 const SVF::VFGNode* BlindedTaintTracking::LLVMValue2VFGNode(Value* value) {
-	errs() << "converting: " << *value << "\n";
+	// errs() << "converting: " << *value << "\n";
 	SVF::PAGNode* pNode = pag->getPAGNode(pag->getValueNode(value));
 	const SVF::VFGNode* vfgNode = svfg->getDefSVFGNode(pNode);
 	return vfgNode;
@@ -248,7 +248,7 @@ const Value* BlindedTaintTracking::VFGNode2LLVMValue(const SVF::SVFGNode* node) 
    if(const SVF::StmtSVFGNode* stmt = SVF::SVFUtil::dyn_cast<SVF::StmtSVFGNode>(node)) {
 			if (SVF::SVFUtil::isa<SVF::StoreSVFGNode>(stmt)) {
 				return nullptr;
-			}            
+			}
 			else if (stmt->getPAGDstNode()->hasValue()) {
 				return stmt->getPAGDstNode()->getValue();
 			}
@@ -283,7 +283,7 @@ const Value* BlindedTaintTracking::VFGNode2LLVMValue(const SVF::SVFGNode* node) 
 			const Value* unaryOpVal = unaryOpVFGNode->getRes()->getValue();
 			if (isa<UnaryOperator>(unaryOpVal)) {
 				return unaryOpVal;
-			} 
+			}
 			else {
 				return nullptr;
 			}
@@ -295,7 +295,7 @@ AnalysisKey BlindedTaintTracking::Key;
 TaintResult BlindedTaintTracking::run(Module& M, ModuleAnalysisManager &AM) {
 	buildSVFG(M);
 
-	// beware that buildTaintedSet will always clear the Result 
+	// beware that buildTaintedSet will always clear the Result
 	// and marked tainted values
 	buildTaintedSet(0, M);
 	markInstrsForConversion();

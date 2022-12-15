@@ -2,8 +2,6 @@
 #define LLVM_TRANSFORMS_BLINDEDCOMPUTATION_BLINDEDTAINTTRACKING_H
 
 #include "llvm/IR/PassManager.h"
-#include "llvm/Analysis/TaintTracking.h"
-#include "llvm/Analysis/BasicAliasAnalysis.h"
 
 #include "llvm/Analysis/SVF/Graphs/VFG.h"
 #include "llvm/Analysis/SVF/WPA/WPAPass.h"
@@ -64,7 +62,7 @@ private:
 	void extractTaintSource(Module &M);
 
 	const SVF::VFGNode* LLVMValue2VFGNode(Value* value);
-	const Value* VFGNode2LLVMValue(const SVF::SVFGNode* node); 
+	const Value* VFGNode2LLVMValue(const SVF::SVFGNode* node);
 
 	bool DefUsePropagate(const SVF::VFGNode* vfgNode);
 	bool SVFGPropagate(const SVF::VFGNode* vfgNode);

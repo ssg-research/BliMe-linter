@@ -98,6 +98,7 @@ MODULE_PASS("kasan-module", ModuleAddressSanitizerPass(/*CompileKernel=*/true, f
 MODULE_PASS("sancov-module", ModuleSanitizerCoveragePass())
 MODULE_PASS("poison-checking", PoisonCheckingPass())
 MODULE_PASS("blinded-instr-conv", BlindedInstrConversionPass())
+MODULE_PASS("metadata-modify", ModifyMetadataPass())
 MODULE_PASS("print<blinded-data-usage>", BlindedDataUsagePrinterPass(dbgs()))
 #undef MODULE_PASS
 

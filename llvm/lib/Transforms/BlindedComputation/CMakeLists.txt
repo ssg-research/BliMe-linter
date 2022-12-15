@@ -8,15 +8,16 @@ add_llvm_component_library(LLVMBlindedComputation
   BlindedTaintTracking.cpp
   BlindedDataUsage.cpp
   FunctionCloning.cpp
+  ModifyMetadata.cpp
 
   DEPENDS
   intrinsics_gen
   # Svf
 
-  LINK_LIBS 
-  LLVMTransformUtils 
+  LINK_LIBS
+  LLVMTransformUtils
   Svf
-  
+
 )
 
 # include_directories(/home/x34duan/compiler/bc-llvm/SVF/include)
