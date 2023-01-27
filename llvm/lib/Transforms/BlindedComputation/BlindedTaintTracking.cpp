@@ -14,11 +14,44 @@ void TaintResult::clearResults() {
 	BlndSelect.clear();
 	TaintedValues.clear();
 	BlindedPtrArg.clear();
+	TTGraph.clear();
+	releaseSVFG();
 }
 
 void BlindedTaintTracking::clearResults() {
 	TResult.clearResults();
 	TaintSource.clear();
+}
+
+void TaintResult::backtrace(const Value* valueNode) {
+	std::vector<std::string> result;
+	std::queue<const SVF::VFGNode*> workList;
+
+	SVF::PAGNode* pNode = pag->getPAGNode(pag->getValueNode(valueNode));
+	const SVF::VFGNode* vfgNode = svfg->getDefSVFGNode(pNode);
+	workList.push(vfgNode);
+	int cnt = 1;
+	std::set<const SVF::VFGNode*> visited;
+	visited.insert(vfgNode);
+
+	while (!workList.empty()) {
+		const SVF::VFGNode* frt = workList.front();
+		workList.pop();
+		if (frt == nullptr) {
+			break;
+		}
+		errs() << cnt++ << ". " << frt->toString() << "\n";
+		assert(TTGraph.find(frt) != TTGraph.end() && "Cannot find node in TTGraph");
+		for (auto vnode : TTGraph[frt]) {
+			if (visited.count(vnode)) {
+				continue;
+			}
+			else {
+				workList.push(vnode);
+				visited.insert(vnode);
+			}
+		}
+	}
 }
 
 void BlindedTaintTracking::buildSVFG(Module &M) {
@@ -31,7 +64,11 @@ void BlindedTaintTracking::buildSVFG(Module &M) {
 	svfg = svfBuilder.buildFullSVFGWithoutOPT(ander);
 }
 
-void BlindedTaintTracking::releaseSVFG() {
+void TaintResult::releaseSVFG() {
+	if (ander == nullptr) {
+		errs() << "##########did not release"<< "\n";
+		return;
+	}
 	SVF::LLVMModuleSet::releaseLLVMModuleSet();
 	SVF::PAG::releasePAG();
 }
@@ -46,6 +83,7 @@ bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 		return false;
 	}
 	TResult.TaintedValues.insert(V);
+
 	if (const Instruction* vInstr = dyn_cast<Instruction>(V)) {
 
 		LLVMContext &cont = vInstr->getContext();
@@ -63,12 +101,19 @@ bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 // Currently, the propagation from blinded data param is seemingly a bug
 void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 	clearResults();
+	buildSVFG(M);
+	TResult.ander = ander;
+	TResult.pag = pag;
+	TResult.svfg = svfg;
+
+	int tempCtr = 0;
 	extractTaintSource(M);
 	std::set<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> handledNodes;
 	std::vector<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> vfgNodeWorkList;
 
-
 	for (auto vfgNode : TaintSource) {
+		TResult.TTGraph[vfgNode].push_back(nullptr);
+		// TResult.IDToString[curId] = vfgNode->toString();
 		vfgNodeWorkList.push_back({nullptr, vfgNode});
 	}
 
@@ -134,6 +179,12 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 			}
 			if (propagateDefUse) {
 				addTaintedValue(valNode);
+				tempCtr++;
+				if (tempCtr == 100) {
+					llvm::outs() << "propagate " << *valNode << "\n";
+					tempCtr -= 100;
+				}
+
 				for (auto valUser : valNode->users()) {
 					const Value* valUserVal = dyn_cast<Value>(valUser);
 					Value* NValUserVal = const_cast<Value*>(valUserVal);
@@ -143,6 +194,7 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 						if (NValUserVal != nullptr) {
 							if (!handledNodes.count({vfgNode, userVFGNode})) {
 								vfgNodeWorkList.push_back({vfgNode, userVFGNode});
+								TResult.TTGraph[userVFGNode].push_back(vfgNode);
 							}
 						}
 					}
@@ -156,6 +208,9 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 
 			if (!handledNodes.count({vfgNode, dstNode})) {
 				vfgNodeWorkList.push_back({vfgNode, dstNode});
+				TResult.TTGraph[dstNode].push_back(vfgNode);
+				// TResult.IDToString[idcur] = vfgNode->toString();
+				// TResult.IDToString[idnext] = dstNode->toString();
 				// if (vfgNode->getNodeKind() == SVF::VFGNode::FParm) {
 				// 	errs() << "VFGFParmNode: " << vfgNode->toString() << "\n" << dstNode->toString() << "\n";
 				// }
@@ -194,8 +249,6 @@ void BlindedTaintTracking::markInstrsForConversion(bool clear) {
 			}
 		}
 	}
-	// ResultCached = true;
-
 }
 
 void BlindedTaintTracking::extractTaintSource(Function &F) {
@@ -247,6 +300,8 @@ const SVF::VFGNode* BlindedTaintTracking::LLVMValue2VFGNode(Value* value) {
 const Value* BlindedTaintTracking::VFGNode2LLVMValue(const SVF::SVFGNode* node) {
    if(const SVF::StmtSVFGNode* stmt = SVF::SVFUtil::dyn_cast<SVF::StmtSVFGNode>(node)) {
 			if (SVF::SVFUtil::isa<SVF::StoreSVFGNode>(stmt)) {
+				// auto SNode = SVF::SVFUtil::dyn_cast<SVF::StoreSVFGNode>(stmt);
+				// SNode->toString();
 				return nullptr;
 			}
 			else if (stmt->getPAGDstNode()->hasValue()) {
@@ -293,15 +348,12 @@ const Value* BlindedTaintTracking::VFGNode2LLVMValue(const SVF::SVFGNode* node) 
 }
 AnalysisKey BlindedTaintTracking::Key;
 TaintResult BlindedTaintTracking::run(Module& M, ModuleAnalysisManager &AM) {
-	buildSVFG(M);
+	// buildSVFG(M);
 
 	// beware that buildTaintedSet will always clear the Result
 	// and marked tainted values
 	buildTaintedSet(0, M);
 	markInstrsForConversion();
-	ResultCached = true;
-
-	releaseSVFG();
 
 	return TResult;
 

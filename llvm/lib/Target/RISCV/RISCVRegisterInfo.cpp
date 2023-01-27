@@ -152,6 +152,9 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
   Register FrameReg;
+  if(!(FIOperandNum+1 < MI.getNumOperands())) {
+    MF.getFunction().dump();
+  }
   int Offset =
       getFrameLowering(MF)->getFrameIndexReference(MF, FrameIndex, FrameReg) +
       MI.getOperand(FIOperandNum + 1).getImm();

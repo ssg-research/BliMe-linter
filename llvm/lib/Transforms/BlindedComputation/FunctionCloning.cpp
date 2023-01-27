@@ -3,22 +3,22 @@
 using namespace::llvm;
 
 void BlindedTTFC::FuncCloning(Module &M, TaintResult& TR) {
-  SVF::SVFModule* svfModule = SVF::LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(M);
-	SVF::PAGBuilder pagBuilder;
-	auto pag = pagBuilder.build(svfModule);
-  auto ander = new SVF::Andersen(pag);
-	ander->analyze();
+  // SVF::SVFModule* svfModule = SVF::LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(M);
+	// SVF::PAGBuilder pagBuilder;
+	// auto pag = pagBuilder.build(svfModule);
+  // auto ander = new SVF::Andersen(pag);
+	// ander->analyze();
 
   for (Function &F : M) {
     if (F.isDeclaration()) {
       continue;
     }
     // errs() << "Function cloning: checking..." << F.getName() << "\n";
-    FuncCloning(F, TR, ander);
+    FuncCloning(F, TR, nullptr);
   }
 
-  SVF::LLVMModuleSet::releaseLLVMModuleSet();
-	SVF::PAG::releasePAG();
+  // SVF::LLVMModuleSet::releaseLLVMModuleSet();
+	// SVF::PAG::releasePAG();
 
 }
 
@@ -62,7 +62,7 @@ bool BlindedTTFC::propagateBlindedArgumentFunctionCall(CallBase &CB, Function &F
     BlindedFunc = generateBlindedCopy(NewName, F, ParamNos);
   }
 
-  errs() << "BlindedCopy: " << *BlindedFunc << "\n";
+  errs() << "BlindedCopy: " << BlindedFunc->getName() << "\n";
   errs() << "PrevFunc: " << CB << "\n\n";
 
   CB.setCalledFunction(BlindedFunc);
@@ -98,8 +98,8 @@ Function* BlindedTTFC::generateBlindedCopy(
   CloneFunctionInto(NewF, &F, Map, F.getSubprogram() != nullptr, Returns,
                     "", nullptr);
 
-  for (unsigned ParamNo : ParamNos)
-    NewF->addParamAttr(ParamNo, Attribute::Blinded);
+  // for (unsigned ParamNo : ParamNos)
+  //   NewF->addParamAttr(ParamNo, Attribute::Blinded);
 
   return NewF;
 }

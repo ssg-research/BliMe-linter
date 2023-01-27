@@ -16,7 +16,7 @@
 #include <vector>
 #include <unordered_map>
 #include <set>
-
+#include <queue>
 
 namespace llvm {
 
@@ -28,8 +28,15 @@ public:
 	std::vector<const Value*> BlndSelect;
 	std::set<const Value*> TaintedValues;
 	std::set<const Value*> BlindedPtrArg;
+	unordered_map<const SVF::VFGNode*, vector<const SVF::VFGNode*>> TTGraph;
+
+	SVF::Andersen* ander = nullptr;
+	SVF::PAG* pag = nullptr;
+	SVF::SVFG* svfg = nullptr;
 
 	void clearResults();
+	void backtrace(const Value* val);
+	void releaseSVFG();
 
 };
 
@@ -39,9 +46,9 @@ class BlindedTaintTracking : public AnalysisInfoMixin<BlindedTaintTracking> {
 public:
 	// Constructor(s): initializes SVF
 	using Result = TaintResult;
-	SVF::Andersen* ander;
-	SVF::PAG* pag;
-	SVF::SVFG* svfg;
+	SVF::Andersen* ander = nullptr;
+	SVF::PAG* pag = nullptr;
+	SVF::SVFG* svfg = nullptr;
 
 	Result run(Module& M, ModuleAnalysisManager &AM);
 	// void invalidate();
@@ -64,17 +71,14 @@ private:
 	const SVF::VFGNode* LLVMValue2VFGNode(Value* value);
 	const Value* VFGNode2LLVMValue(const SVF::SVFGNode* node);
 
-	bool DefUsePropagate(const SVF::VFGNode* vfgNode);
-	bool SVFGPropagate(const SVF::VFGNode* vfgNode);
-
 	void buildSVFG(Module &M);
 	// iteration: the max time of function cloning
 	void buildTaintedSet(int iteration, Module& M);
 	void clearResults();
 	bool hasViolation(Module& M);
 	void markInstrsForConversion(bool clear = false);
-	void printInstrsForConversion();
-	void printViolations();
+	// void printInstrsForConversion();
+	// void printViolations();
 	void releaseSVFG();
 };
 

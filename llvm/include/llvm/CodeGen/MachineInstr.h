@@ -22,9 +22,12 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
+// #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/IR/DebugLoc.h"
+// #include "llvm/IR/Function.h"
 #include "llvm/IR/InlineAsm.h"
+// #include "llvm/IR/Instruction.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/ArrayRecycler.h"
@@ -468,6 +471,18 @@ public:
     return Operands[i];
   }
   MachineOperand& getOperand(unsigned i) {
+    if (!(i < getNumOperands()) ) {
+      // auto fn = getMF()->getName();
+      // auto func = mf->getFunction()->getN;
+
+      // MachineFunction *mf = getMF();
+      // // auto name = mf->getName();
+      // Function &f = mf->getFunction();
+      // f.dump();
+
+      dump();
+    }
+
     assert(i < getNumOperands() && "getOperand() out of range!");
     return Operands[i];
   }
