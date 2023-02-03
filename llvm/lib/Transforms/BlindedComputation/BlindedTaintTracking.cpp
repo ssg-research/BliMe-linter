@@ -13,8 +13,8 @@ void TaintResult::clearResults() {
 	BlndGep.clear();
 	BlndSelect.clear();
 	TaintedValues.clear();
-	BlindedPtrArg.clear();
 	TTGraph.clear();
+	TaintedCallBases.clear();
 	releaseSVFG();
 }
 
@@ -83,6 +83,7 @@ bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 		return false;
 	}
 	TResult.TaintedValues.insert(V);
+	TResult.TaintedVFGNodes.insert(LLVMValue2VFGNode(const_cast<Value*>(V)));
 
 	if (const Instruction* vInstr = dyn_cast<Instruction>(V)) {
 
@@ -91,8 +92,7 @@ bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 		const_cast<Instruction*>(vInstr)->setMetadata("my.md.blindedNTT", N);
 	}
 	return true;
-	// errs() << "While handling value: " << V << "\n";
-	// assert(false && "Trying give a non-instr blinded attribute\n");
+
 }
 
 
@@ -101,30 +101,62 @@ bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 // Currently, the propagation from blinded data param is seemingly a bug
 void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 	clearResults();
+	static int timer = 0;
 	buildSVFG(M);
 	TResult.ander = ander;
 	TResult.pag = pag;
 	TResult.svfg = svfg;
+	timer++;
 
 	int tempCtr = 0;
 	extractTaintSource(M);
 	std::set<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> handledNodes;
 	std::vector<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> vfgNodeWorkList;
+	std::vector<int> ActualInTimes;
 
 	for (auto vfgNode : TaintSource) {
+	#ifdef TRACKBACK_BLINDED
 		TResult.TTGraph[vfgNode].push_back(nullptr);
-		// TResult.IDToString[curId] = vfgNode->toString();
+	#endif
 		vfgNodeWorkList.push_back({nullptr, vfgNode});
+		ActualInTimes.push_back(0);
 	}
 
 	while (!vfgNodeWorkList.empty()) {
 		auto backPair = vfgNodeWorkList.back();
 		const SVF::VFGNode* vfgNode = backPair.second;
 		const SVF::VFGNode* predVFGNode = backPair.first;
+		int afterActualIn = ActualInTimes.back();
+
 		bool propagateDefUse = false;
 
+		// if (timer == 1) {
+		// // if (true) {
+		// 	if (predVFGNode != nullptr) {
+		// 		llvm::outs() << "predVFGNode is: " << predVFGNode->toString() << "\n";
+
+		// 	}
+		// 	llvm::outs() << "currentVFGNode is: " << vfgNode->toString() << "\n\n";
+		// }
+
+		ActualInTimes.pop_back();
 		vfgNodeWorkList.pop_back();
 		// errs() << "handling: " << vfgNode->toString() << "\n";
+
+		if (auto CB = SVF::SVFUtil::dyn_cast<SVF::ActualINSVFGNode>(vfgNode)) {
+			errs() << "current CB: " << *CB << "\n";
+			if (!afterActualIn) {
+				afterActualIn = 1;
+				TResult.TaintedCallBases.push_back(CB->getCallSite()->getCallSite());
+			}
+		}
+		else if (auto AP = SVF::SVFUtil::dyn_cast<SVF::ActualParmSVFGNode>(vfgNode)) {
+			errs() << "current actual parameter: " << *AP << "\n";
+			if (!afterActualIn) {
+				afterActualIn = 1;
+				TResult.TaintedCallBases.push_back(AP->getCallSite()->getCallSite());
+			}
+		}
 
 		if (handledNodes.count(backPair)) {
 			continue;
@@ -140,9 +172,13 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 		// 	errs() << "ValNode is nullptr " << "\n";
 		// }
 		// const Value*
-		if (SVF::SVFUtil::isa<SVF::ActualParmSVFGNode>(vfgNode)) {
-			TResult.BlindedPtrArg.insert(valNode);
-		}
+		// if (SVF::SVFUtil::isa<SVF::ActualParmSVFGNode>(vfgNode)) {
+		// 	if (valNode->getType()->isPointerTy()) {
+		// 		errs() << "adding blinded ptr arg...\n";
+		// 		errs() << vfgNode->toString() << "\n\n";
+		// 		TResult.BlindedPtrArg.insert(valNode);
+		// 	}
+		// }
 
 		if (valNode != nullptr){
 			propagateDefUse = true;
@@ -180,10 +216,10 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 			if (propagateDefUse) {
 				addTaintedValue(valNode);
 				tempCtr++;
-				if (tempCtr == 100) {
-					llvm::outs() << "propagate " << *valNode << "\n";
-					tempCtr -= 100;
-				}
+				// if (tempCtr == 100) {
+				// 	llvm::outs() << "propagate " << *valNode << "\n";
+				// 	tempCtr -= 100;
+				// }
 
 				for (auto valUser : valNode->users()) {
 					const Value* valUserVal = dyn_cast<Value>(valUser);
@@ -194,7 +230,10 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 						if (NValUserVal != nullptr) {
 							if (!handledNodes.count({vfgNode, userVFGNode})) {
 								vfgNodeWorkList.push_back({vfgNode, userVFGNode});
+								ActualInTimes.push_back(afterActualIn);
+								#ifdef TRACEBACK_BLINDED
 								TResult.TTGraph[userVFGNode].push_back(vfgNode);
+								#endif
 							}
 						}
 					}
@@ -208,12 +247,11 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 
 			if (!handledNodes.count({vfgNode, dstNode})) {
 				vfgNodeWorkList.push_back({vfgNode, dstNode});
+				ActualInTimes.push_back(afterActualIn);
+				#ifdef TRACEBACK_BLINDED
 				TResult.TTGraph[dstNode].push_back(vfgNode);
-				// TResult.IDToString[idcur] = vfgNode->toString();
-				// TResult.IDToString[idnext] = dstNode->toString();
-				// if (vfgNode->getNodeKind() == SVF::VFGNode::FParm) {
-				// 	errs() << "VFGFParmNode: " << vfgNode->toString() << "\n" << dstNode->toString() << "\n";
-				// }
+				#endif
+
 			}
 		}
 	}
@@ -241,9 +279,9 @@ void BlindedTaintTracking::markInstrsForConversion(bool clear) {
 					TResult.BlndMemOp.push_back(SInst);
 				}
 			}
-			else if (const GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(ValUser)) {
-				TResult.BlndGep.push_back(GEPInst);
-			}
+			// else if (const GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(ValUser)) {
+			// 	TResult.BlndGep.push_back(GEPInst);
+			// }
 			else if (const SelectInst* SelInst = dyn_cast<SelectInst>(ValUser)) {
 				TResult.BlndSelect.push_back(SelInst);
 			}
@@ -253,6 +291,7 @@ void BlindedTaintTracking::markInstrsForConversion(bool clear) {
 
 void BlindedTaintTracking::extractTaintSource(Function &F) {
 	// errs() << F.getName() << "\n";
+
 	for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
 		if (Arg->hasAttribute(Attribute::Blinded)) {
 			const SVF::VFGNode* taintedArg = LLVMValue2VFGNode(Arg);
@@ -265,7 +304,6 @@ void BlindedTaintTracking::extractTaintSource(Function &F) {
 			}
 		}
 	}
-
 }
 
 void BlindedTaintTracking::extractTaintSource(Module &M) {

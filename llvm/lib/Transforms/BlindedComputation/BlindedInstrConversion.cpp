@@ -34,20 +34,20 @@ static uint64_t getTotalStride(Value* TaintedIdx, GetElementPtrInst *GEP, int& V
     }
   }
   if (NewIndices.size() == 0) {
-    errs() << GEP->getFunction()->getName() << "\n";
-    const llvm::DebugLoc &debugInfo = GEP->getDebugLoc();
-    llvm::StringRef directory = debugInfo->getDirectory();
-    llvm::StringRef filePath = debugInfo->getFilename();
-    int line = debugInfo->getLine();
-    int column = debugInfo->getColumn();
-    errs() << "DEBUG INFO:" << "\n";
-    errs() << "FilePath: " << filePath << "\n";
-    errs() << "line: " << line << "\n";
-    errs() << "column: " << column << "\n";
-    assert(false && "need to check this special case");
+    // errs() << GEP->getFunction()->getName() << "\n";
+    // const llvm::DebugLoc &debugInfo = GEP->getDebugLoc();
+    // llvm::StringRef directory = debugInfo->getDirectory();
+    // llvm::StringRef filePath = debugInfo->getFilename();
+    // int line = debugInfo->getLine();
+    // int column = debugInfo->getColumn();
+    // errs() << "DEBUG INFO:" << "\n";
+    // errs() << "FilePath: " << filePath << "\n";
+    // errs() << "line: " << line << "\n";
+    // errs() << "column: " << column << "\n";
+    // assert(false && "need to check this special case");
   }
-  assert(GEPIdxPos != -1 && "GetTotalStride: GEPIdxPos == -1: cannot find tainted idx in the GEP");
-  errs() << "GEPIdxPos: " << GEPIdxPos << "\n";
+  // assert(GEPIdxPos != -1 && "GetTotalStride: GEPIdxPos == -1: cannot find tainted idx in the GEP");
+  // errs() << "GEPIdxPos: " << GEPIdxPos << "\n";
 
   Type* arrType = GetElementPtrInst::getIndexedType(GEP->getSourceElementType(), NewIndices);
 
@@ -67,7 +67,7 @@ static uint64_t getTotalStride(Value* TaintedIdx, GetElementPtrInst *GEP, int& V
   }
   else {
     errs() << GEP->getFunction()->getName() << "\n";
-    assert(false && "unable to handle this type for expansion");
+    // assert(false && "unable to handle this type for expansion");
   }
 
   ValidForTrans = 0;
@@ -212,15 +212,15 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
     // - Create basic blocks for the loop header, body, and increment
     // - Add a new terminator that branches to the loop header
 
-    LLVMContext &Context = GEP->getContext();
-    BasicBlock *LoopHeaderBB = GEP->getParent();
-    Instruction *NextInst = GEP->getNextNode();
+    LLVMContext &Context = SI->getContext();
+    BasicBlock *LoopHeaderBB = SI->getParent();
+    Instruction *PrevInst = SI->getPrevNode();
 
     // ensures splitBasicBlock always works
-    assert(NextInst->getNextNode());
+    // assert(NextInst->getNextNode());
     assert(LoopHeaderBB->getTerminator());
-    BasicBlock *AfterLoopBB = LoopHeaderBB->splitBasicBlock(NextInst,
-                                                            GEPName + ".after.loop");
+    BasicBlock *AfterLoopBB = LoopHeaderBB->splitBasicBlock(SI,
+                                                            GEPName + ".store.after.loop");
 
     // check we still have a terminator after split
     assert(LoopHeaderBB->getTerminator());
@@ -228,8 +228,8 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
     IRBuilder<> Builder(Context);
 
     BasicBlock *LoopBodyBB = BasicBlock::Create(Context,
-                                                GEPName + ".loop.body",
-                                                GEP->getFunction(),
+                                                GEPName + ".store.loop.body",
+                                                SI->getFunction(),
                                                 AfterLoopBB);
 
     Builder.SetInsertPoint(LoopHeaderBB);
@@ -239,7 +239,7 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
     auto GEPAddr = Builder.CreateGEP(GEPPtrType,
                                      GEP->getPointerOperand(),
                                      createGepIndexList(TaintedIdx, GEP, Zero),
-                                     GEPName + ".element.zero");
+                                     GEPName + ".store.element.zero");
     // Pointer bitcast
     // auto GEPPtrType = GEP->getResultElementType();
     auto SIValueType = SI->getOperand(0)->getType();
@@ -265,7 +265,7 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
     Builder.SetInsertPoint(LoopBodyBB);
 
     // Create PHI for loop induction variable
-    auto InducVar = Builder.CreatePHI(TaintedIdx->getType(), 2, GEPName + ".induc.var");
+    auto InducVar = Builder.CreatePHI(TaintedIdx->getType(), 2, GEPName + ".store.induc.var");
     InducVar->addIncoming(Zero, LoopHeaderBB);
 
     // Create PHI for array element selection, set the initial value
@@ -277,7 +277,7 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
     GEPAddr = Builder.CreateGEP(GEPPtrType,
                                 GEP->getPointerOperand(),
                                 createGepIndexList(TaintedIdx, GEP, InducVar),
-                                GEPName + ".blinded.addr");
+                                GEPName + ".store.blinded.addr");
     StoreAddr = GEPAddr;
     if (GEP->getResultElementType() != SIValueType) {
       // errs() << "IF TYPE MISMATCH:" << "\n";
@@ -291,7 +291,7 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
     SelectCmpStore = Builder.CreateCmp(CmpInst::ICMP_EQ, InducVar, TaintedIdx);
     SelectResStore = Builder.CreateSelect(SelectCmpStore, SI->getOperand(0), GEPLoad);
     GEPStore = Builder.CreateStore(SelectResStore, StoreAddr);
-    StoreWorkList.push_back(static_cast<StoreInst*>(GEPStore));
+    // StoreWorkList.push_back(static_cast<StoreInst*>(GEPStore));
 
     // increment induction variable
     Value *One = ConstantInt::get(Context, llvm::APInt(64, 1));
@@ -330,22 +330,22 @@ static bool expandBlindedArrayAccesses(Module &M,
     }
   }
 
-  // while (!storeWorkList.empty()) {
-  //   auto SI = storeWorkList.back();
-  //   storeWorkList.pop_back();
-  //   Value* PO = SI->getPointerOperand();
+  while (!storeWorkList.empty()) {
+    auto SI = storeWorkList.back();
+    storeWorkList.pop_back();
+    Value* PO = SI->getPointerOperand();
 
-  //   if (GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(PO)) {
-  //     errs() << "GEP " << *GEPInstr << "\n";
-  //     for (auto Idx = GEPInstr->idx_begin(); Idx != GEPInstr->idx_end(); Idx++) {
-  //       if (RT.TaintedValues.count(*Idx)) {
-  //         GetElementPtrInst* NGEPInstr = const_cast<GetElementPtrInst*>(GEPInstr);
-  //         expandBlindedArrayAccess(*Idx, NGEPInstr, SI, storeWorkList);
-  //         break;
-  //       }
-  //     }
-  //   }
-  // }
+    if (GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(PO)) {
+      errs() << "GEP " << *GEPInstr << "\n";
+      for (auto Idx = GEPInstr->idx_begin(); Idx != GEPInstr->idx_end(); Idx++) {
+        if (RT.TaintedValues.count(*Idx)) {
+          GetElementPtrInst* NGEPInstr = const_cast<GetElementPtrInst*>(GEPInstr);
+          expandBlindedArrayAccess(*Idx, NGEPInstr, SI, storeWorkList);
+          break;
+        }
+      }
+    }
+  }
   int ctr = 0;
   while (!loadWorkList.empty())
   {
@@ -357,18 +357,18 @@ static bool expandBlindedArrayAccesses(Module &M,
     if (GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(PO)) {
       errs() << "GEP " << *GEPInstr << "\n";
       for (auto Idx = GEPInstr->idx_begin(); Idx != GEPInstr->idx_end(); Idx++) {
-        if (GEPInstr->getNumIndices() == 1) {
-          const llvm::DebugLoc &debugInfo = LI->getDebugLoc();
-          llvm::StringRef directory = debugInfo->getDirectory();
-          llvm::StringRef filePath = debugInfo->getFilename();
-          int line = debugInfo->getLine();
-          int column = debugInfo->getColumn();
-          errs() << "DEBUG INFO:" << "\n";
-          errs() << "FilePath: " << filePath << "\n";
-          errs() << "line: " << line << "\n";
-          errs() << "column: " << column << "\n";
-          RT.backtrace(GEPInstr);
-        }
+        // if (GEPInstr->getNumIndices() == 1) {
+        //   const llvm::DebugLoc &debugInfo = LI->getDebugLoc();
+        //   llvm::StringRef directory = debugInfo->getDirectory();
+        //   llvm::StringRef filePath = debugInfo->getFilename();
+        //   int line = debugInfo->getLine();
+        //   int column = debugInfo->getColumn();
+        //   errs() << "DEBUG INFO:" << "\n";
+        //   errs() << "FilePath: " << filePath << "\n";
+        //   errs() << "line: " << line << "\n";
+        //   errs() << "column: " << column << "\n";
+        //   RT.backtrace(GEPInstr);
+        // }
         if (RT.TaintedValues.count(*Idx)) {
           int valft = 0;
           // if (getTotalStride(&*Idx, GEP, valft));
@@ -493,12 +493,12 @@ void BlindedInstrConversionPass::validate(Module& M, ModuleAnalysisManager& AM) 
   auto &BDU = AM.getResult<BlindedDataUsageAnalysis>(M);
   // Verify our blinded data usage policies
   if(!BDU.violations().empty()){
-      // for (auto &V : BDU.violations()) {
-      //   V.first->print(errs());
-      //   // const llvm::DebugLoc &debugInfo = ((llvm::Instruction*)(V.first))->getDebugLoc();
-      //   // errs() << "\n" <<debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
-      //   errs() << V.second.str().c_str() << "\n";
-      // }
+      for (auto &V : BDU.violations()) {
+        V.first->print(errs());
+        // const llvm::DebugLoc &debugInfo = ((llvm::Instruction*)(V.first))->getDebugLoc();
+        // errs() << "\n" <<debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
+        errs() << V.second.str().c_str() << "\n";
+      }
       // llvm_unreachable("validateBlindedData returns 'false'");
   }
 }
@@ -509,9 +509,8 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   FunctionAnalysisManager &FAM =
       AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
 
-  auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
   auto FC = BlindedTTFC();
-  FC.FuncCloning(M, TTResult);
+  FC.FuncCloning(M, AM);
   AM.invalidate(M, PreservedAnalyses::none());
 
   // validate(M, AM);
@@ -521,7 +520,7 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   transform(M, AM);
   validate(M, AM);
 
-  errs() << "finished building TT...\n";
+  // errs() << "finished building TT...\n";
 
   PreservedAnalyses PA = PreservedAnalyses::all();
   // std::unordered_map<const Function*, SmallPtrSet<Value*, 4>> TaintInfo;

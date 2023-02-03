@@ -13,24 +13,36 @@ BlindedDataUsage::BlindedDataUsage(Module &M, ModuleAnalysisManager &AM) {
 		errs() << *Inst << "\n";
     Inst->print(errs());
     std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("Invalid use of blinded data as operand of BranchInst!"));
-    Violations.insert(Violation_Instance);   
+    Violations.insert(Violation_Instance);
 	}
+  int statStore = 0, statLoad = 0;
 	for (auto Inst : TRS.BlndMemOp) {
 		if (isa<LoadInst>(Inst)) {
 			errs() << "loadInstr with a blinded pointer!\n";
 			errs() << *Inst << "\n";
+      statLoad++;
+      // if (auto LI = dyn_cast<LoadInst>(Inst)) {
+      //   const Value* lOperand = LI->getPointerOperand();
+      //   TRS.backtrace(lOperand);
+      // }
       Inst->print(errs());
       std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("LoadInst with a blinded pointer."));
-      Violations.insert(Violation_Instance);   
+      Violations.insert(Violation_Instance);
 		}
 		else if (isa<StoreInst>(Inst)) {
       errs() << "storeInstr with a blinded pointer!\n";
 			errs() << *Inst << "\n";
+      statStore++;
       Inst->print(errs());
       std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("StoreInst with a blinded pointer."));
-      Violations.insert(Violation_Instance);   
-		} 
+      Violations.insert(Violation_Instance);
+		}
 	}
+  errs() << "############stat info################" << "\n";
+  errs() << "StoreInstr: " << statStore << "\n";
+  errs() << "LoadInstr: " << statLoad << "\n";
+  errs() << "############stat info end###########" << "\n";
+
 
 }
 
@@ -47,9 +59,9 @@ PreservedAnalyses BlindedDataUsagePrinterPass::run(Module &M,
 
   if (!BDU.violations().empty()) {
     // Got some violations, now pretty print them since we're a printer pass!
-    for (auto &V : BDU.violations()) { 
+    for (auto &V : BDU.violations()) {
       if (V.first == nullptr) {
-        OS << V.second << "\n\n"; continue; 
+        OS << V.second << "\n\n"; continue;
       }
 
       const Instruction *Inst = dyn_cast<const Instruction>(V.first);
@@ -59,7 +71,7 @@ PreservedAnalyses BlindedDataUsagePrinterPass::run(Module &M,
       OS << "description: " << V.second << "\n\n";
     }
   }
-    
+
   // Tell the pass manager we don't invalidate any of the used analyses
   PreservedAnalyses PA;
   PA.preserve<BlindedDataUsageAnalysis>();

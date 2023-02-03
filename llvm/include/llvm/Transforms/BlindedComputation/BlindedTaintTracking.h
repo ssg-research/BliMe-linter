@@ -27,12 +27,15 @@ public:
 	std::vector<const Value*> BlndMemOp;
 	std::vector<const Value*> BlndSelect;
 	std::set<const Value*> TaintedValues;
-	std::set<const Value*> BlindedPtrArg;
+	std::vector<const Instruction*> TaintedCallBases;
+	std::set<const SVF::VFGNode*> TaintedVFGNodes;
 	unordered_map<const SVF::VFGNode*, vector<const SVF::VFGNode*>> TTGraph;
 
 	SVF::Andersen* ander = nullptr;
 	SVF::PAG* pag = nullptr;
 	SVF::SVFG* svfg = nullptr;
+
+	int times = 0;
 
 	void clearResults();
 	void backtrace(const Value* val);
@@ -77,9 +80,7 @@ private:
 	void clearResults();
 	bool hasViolation(Module& M);
 	void markInstrsForConversion(bool clear = false);
-	// void printInstrsForConversion();
-	// void printViolations();
-	void releaseSVFG();
+
 };
 
 } // namespace llvm

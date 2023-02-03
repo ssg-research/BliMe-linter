@@ -34,10 +34,11 @@ namespace llvm {
 
 class BlindedTTFC {
 public:
-  void FuncCloning(Module &M, TaintResult& TR);
-  void FuncCloning(Function &F, TaintResult& TR, SVF::Andersen* pta);
+  void FuncCloning(Module &M, ModuleAnalysisManager& AM);
+  void FuncCloning(Function &F, TaintResult& TR, SVF::Andersen* pta, bool& changed);
   bool propagateBlindedArgumentFunctionCall(CallBase &CB, Function &F, ArrayRef<unsigned> ParamNos);
   Function* generateBlindedCopy(Twine &Name, Function &F, ArrayRef<unsigned> ParamNos);
+  bool callBaseCloning(CallBase *CB, TaintResult& TR);
 private:
   unsigned arrToBitmap(ArrayRef<unsigned> &Arr) {
     unsigned Result = 0;

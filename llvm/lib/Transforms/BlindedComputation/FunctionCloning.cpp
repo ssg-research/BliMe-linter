@@ -2,45 +2,118 @@
 
 using namespace::llvm;
 
-void BlindedTTFC::FuncCloning(Module &M, TaintResult& TR) {
-  // SVF::SVFModule* svfModule = SVF::LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(M);
-	// SVF::PAGBuilder pagBuilder;
-	// auto pag = pagBuilder.build(svfModule);
-  // auto ander = new SVF::Andersen(pag);
-	// ander->analyze();
+void BlindedTTFC::FuncCloning(Module &M, ModuleAnalysisManager& AM) {
 
-  for (Function &F : M) {
-    if (F.isDeclaration()) {
-      continue;
+  bool changed = false;
+  do {
+    auto& TR = AM.getResult<BlindedTaintTracking>(M);
+    changed = false;
+    // iterating the module while adding functions to the module:
+    // might cause undefined behavior
+    vector<Function*> WorkList;
+
+    // for (Function &F : M) {
+    //   if (F.isDeclaration()) {
+    //     continue;
+    //   }
+    //   for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
+    //     if (Arg->hasAttribute(Attribute::Blinded)) {
+    //       WorkList.push_back(&F);
+    //       break;
+    //     }
+    //   }
+    // }
+    // for (Function *F : WorkList) {
+    //   FuncCloning(*F, TR, TR.ander, changed);
+    // }
+
+    for (auto Instr : TR.TaintedCallBases) {
+      const CallBase* CB = dyn_cast<CallBase>(Instr);
+      assert(CB && "SVF inserted nullptr callbase");
+      CallBase* NCB = const_cast<CallBase*>(CB);
+      if (!M.getFunction(NCB->getCalledFunction()->getName())) {
+        continue;
+      }
+      if (NCB->getCalledFunction()->isDeclaration()) {
+        continue;
+      }
+      changed |= callBaseCloning(NCB, TR);
     }
-    // errs() << "Function cloning: checking..." << F.getName() << "\n";
-    FuncCloning(F, TR, nullptr);
-  }
 
-  // SVF::LLVMModuleSet::releaseLLVMModuleSet();
-	// SVF::PAG::releasePAG();
+    AM.invalidate(M, PreservedAnalyses::none());
+  } while (changed);
+  auto &TR = AM.getResult<BlindedTaintTracking>(M);
+
+  errs() << "done==================================\n";
 
 }
 
-void BlindedTTFC::FuncCloning(Function &F, TaintResult& TR, SVF::Andersen* pta) {
+bool BlindedTTFC::callBaseCloning(CallBase *CB, TaintResult& TR) {
+  bool changed = false;
+
+  errs() << "\nCloning call base: " << *CB << "\n";
+  if (Function *CF = CB->getCalledFunction()) {
+    SmallVector<unsigned, 8> ParamNos;
+    for (auto &Arg : CB->args()) {
+      unsigned n = Arg.getOperandNo();
+      bool paramBlinded = CF->hasParamAttribute(n, Attribute::Blinded);
+      if (TR.TaintedValues.count(Arg)) {
+        if (!paramBlinded) {
+          changed = true;
+        }
+        ParamNos.push_back(n);
+      }
+      else if (Arg->getType()->isPointerTy()) {
+        SVF::NodeID pNodeId = TR.ander->getPAG()->getValueNode(Arg);
+        const SVF::NodeBS& pts = TR.ander->getPts(pNodeId);
+        for (auto it = pts.begin(); it != pts.end(); it++) {
+          errs() << "\nAnalyzing vfgNode: " << *it << "\n";
+          // if (!TR.svfg->hasVFGNode(*it)) {
+          //   errs() << "\nNo vfgNode for " << *it << "\n";
+          //   continue;
+          // }
+          if (!TR.pag->hasGNode(*it)) {
+            errs() << "\n No pag Node for " << *it << "\n";
+            continue;
+          }
+          auto pagNode = TR.pag->getPAGNode(*it);
+          if (SVF::SVFUtil::isa<SVF::DummyValPN>(pagNode)
+              || pagNode->getNodeKind() == SVF::PAGNode::DummyValNode
+              || pagNode->getNodeKind() == SVF::PAGNode::DummyObjNode) {
+            errs() << "\n pagnode is dummyvalpn " << "*it" << "\n";
+            continue;
+          }
+          errs() << "current pag: " << *pagNode->getValue() << "\n";
+          if (TR.TaintedValues.count(pagNode->getValue())) {
+            errs() << "\nTainted Node" << "\n";
+            if (!paramBlinded) {
+              changed = true;
+            }
+            ParamNos.push_back(n);
+            break;
+          }
+        }
+      }
+    }
+    if (ParamNos.empty()) {
+      return false;
+    }
+    propagateBlindedArgumentFunctionCall(*CB, *CF, ParamNos);
+  }
+  return changed;
+}
+
+
+void BlindedTTFC::FuncCloning(Function &F, TaintResult& TR, SVF::Andersen* pta, bool& changed) {
+
+  // Analyze callbase
   for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
     Instruction& Instr = *I;
     if (CallBase* CB = dyn_cast<CallBase>(&Instr)) {
-      if (Function *CF = CB->getCalledFunction()) {
-        SmallVector<unsigned, 8> ParamNos;
-        for (auto &Arg : CB->args()) {
-          unsigned n = Arg.getOperandNo();
-          if (TR.TaintedValues.count(Arg)) {
-            ParamNos.push_back(n);
-          }
-        }
-        if (ParamNos.empty()) {
-          continue;
-        }
-        propagateBlindedArgumentFunctionCall(*CB, *CF, ParamNos);
-      }
+      changed |= callBaseCloning(CB, TR);
     }
   }
+
 }
 
 bool BlindedTTFC::propagateBlindedArgumentFunctionCall(CallBase &CB, Function &F, ArrayRef<unsigned> ParamNos) {
@@ -49,9 +122,19 @@ bool BlindedTTFC::propagateBlindedArgumentFunctionCall(CallBase &CB, Function &F
     return false;
   }
 
+  string clonedPrefix = ".";
+  bool retVal = false;
+  size_t clonedPrefixPos = F.getName().find(clonedPrefix);
+  StringRef originalName = F.getName();
+
+  if (clonedPrefixPos != StringRef::npos) {
+    originalName = originalName.substr(0, clonedPrefixPos);
+  }
+
+
   // Generate blinded identifier of type NAME.BITMAP, where the BITMAP has a 1
   // for the position (starting from right) of blinded arguments.
-  Twine NewName = F.getName() + "." + Twine(arrToBitmap(ParamNos));
+  Twine NewName = originalName + clonedPrefix + Twine(arrToBitmap(ParamNos));
 
   SmallString<128> NameVec;
   auto *BlindedFunc = F.getParent()->getFunction(NewName.toStringRef(NameVec));
@@ -60,6 +143,7 @@ bool BlindedTTFC::propagateBlindedArgumentFunctionCall(CallBase &CB, Function &F
   if (!BlindedFunc) {
     // The function doesn't exist yet, let's create it then!
     BlindedFunc = generateBlindedCopy(NewName, F, ParamNos);
+    retVal = true;
   }
 
   errs() << "BlindedCopy: " << BlindedFunc->getName() << "\n";
@@ -67,8 +151,7 @@ bool BlindedTTFC::propagateBlindedArgumentFunctionCall(CallBase &CB, Function &F
 
   CB.setCalledFunction(BlindedFunc);
 
-
-  return BlindedFunc->hasFnAttribute(Attribute::Blinded);
+  return retVal;
 }
 
 Function* BlindedTTFC::generateBlindedCopy(
@@ -98,8 +181,8 @@ Function* BlindedTTFC::generateBlindedCopy(
   CloneFunctionInto(NewF, &F, Map, F.getSubprogram() != nullptr, Returns,
                     "", nullptr);
 
-  // for (unsigned ParamNo : ParamNos)
-  //   NewF->addParamAttr(ParamNo, Attribute::Blinded);
+  for (unsigned ParamNo : ParamNos)
+    NewF->addParamAttr(ParamNo, Attribute::Blinded);
 
   return NewF;
 }
