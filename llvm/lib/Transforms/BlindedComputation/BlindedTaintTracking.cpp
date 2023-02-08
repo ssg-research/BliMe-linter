@@ -12,7 +12,10 @@ void TaintResult::clearResults() {
 	BlndMemOp.clear();
 	BlndGep.clear();
 	BlndSelect.clear();
+
 	TaintedValues.clear();
+	TaintedPointers.clear();
+	TaintedObjectsIDs.clear();
 	TTGraph.clear();
 	TaintedCallBases.clear();
 	releaseSVFG();
@@ -66,7 +69,6 @@ void BlindedTaintTracking::buildSVFG(Module &M) {
 
 void TaintResult::releaseSVFG() {
 	if (ander == nullptr) {
-		errs() << "##########did not release"<< "\n";
 		return;
 	}
 	SVF::LLVMModuleSet::releaseLLVMModuleSet();
@@ -83,7 +85,6 @@ bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 		return false;
 	}
 	TResult.TaintedValues.insert(V);
-	TResult.TaintedVFGNodes.insert(LLVMValue2VFGNode(const_cast<Value*>(V)));
 
 	if (const Instruction* vInstr = dyn_cast<Instruction>(V)) {
 
@@ -95,6 +96,25 @@ bool BlindedTaintTracking::addTaintedValue(const Value* V) {
 
 }
 
+void BlindedTaintTracking::propagateTaintedPointers(const Value* pointerVal) {
+	for (auto valUser : pointerVal->users()) {
+		const Value* valUserVal = dyn_cast<Value>(valUser);
+		Value* NValUserVal = const_cast<Value*>(valUserVal);
+		// if user is a store inst, and storing the pointerVal to a pointer
+		// then the pointer operand should be blinded pointer
+		if (const StoreInst* SI = dyn_cast<const StoreInst>(valUserVal)) {
+			const Value* valOp = SI->getValueOperand();
+			if (valOp == pointerVal) {
+				TResult.TaintedPointers.insert(SI->getPointerOperand());
+			}
+		}
+		// For load, we will handle this later
+		// For calbase: it is complicated
+		else if (isa<Instruction>(NValUserVal) && !isa<LoadInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
+			TResult.TaintedPointers.insert(valUserVal);
+		}
+	}
+}
 
 // TODO:
 // Existing bug: need to implement DefUsePropagate function and use it as the condition.
@@ -111,57 +131,60 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 	int tempCtr = 0;
 	extractTaintSource(M);
 	std::set<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> handledNodes;
-	std::vector<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> vfgNodeWorkList;
-	std::vector<int> ActualInTimes;
+	std::queue<std::pair<const SVF::VFGNode*, const SVF::VFGNode*>> vfgNodeWorkList;
+	std::queue<int> ActualInTimes;
 
 	for (auto vfgNode : TaintSource) {
 	#ifdef TRACKBACK_BLINDED
 		TResult.TTGraph[vfgNode].push_back(nullptr);
 	#endif
-		vfgNodeWorkList.push_back({nullptr, vfgNode});
-		ActualInTimes.push_back(0);
+		handledNodes.insert({nullptr, vfgNode});
+		vfgNodeWorkList.push({nullptr, vfgNode});
+		ActualInTimes.push(0);
 	}
 
+	int printctr = 0;
+
 	while (!vfgNodeWorkList.empty()) {
-		auto backPair = vfgNodeWorkList.back();
+		auto backPair = vfgNodeWorkList.front();
 		const SVF::VFGNode* vfgNode = backPair.second;
 		const SVF::VFGNode* predVFGNode = backPair.first;
-		int afterActualIn = ActualInTimes.back();
+		int afterActualIn = ActualInTimes.front();
 
 		bool propagateDefUse = false;
+		bool propagatePointers = false;
 
-		// if (timer == 1) {
-		// // if (true) {
-		// 	if (predVFGNode != nullptr) {
-		// 		llvm::outs() << "predVFGNode is: " << predVFGNode->toString() << "\n";
+		if (timer >= 2) {
+			if (printctr <= 5000) {
+				printctr++;
+				if (predVFGNode != nullptr) {
+					llvm::outs() << "predVFGNode is: " << predVFGNode->toString() << "\n";
+				}
+				llvm::outs() << "currentVFGNode is: " << vfgNode->toString() << "\n\n";
+			}
+		// if (true) {
 
-		// 	}
-		// 	llvm::outs() << "currentVFGNode is: " << vfgNode->toString() << "\n\n";
-		// }
+		}
 
-		ActualInTimes.pop_back();
-		vfgNodeWorkList.pop_back();
+		ActualInTimes.pop();
+		vfgNodeWorkList.pop();
 		// errs() << "handling: " << vfgNode->toString() << "\n";
 
 		if (auto CB = SVF::SVFUtil::dyn_cast<SVF::ActualINSVFGNode>(vfgNode)) {
-			errs() << "current CB: " << *CB << "\n";
 			if (!afterActualIn) {
+				errs() << "current CB: " << *CB << "\n";
+
 				afterActualIn = 1;
 				TResult.TaintedCallBases.push_back(CB->getCallSite()->getCallSite());
 			}
 		}
 		else if (auto AP = SVF::SVFUtil::dyn_cast<SVF::ActualParmSVFGNode>(vfgNode)) {
-			errs() << "current actual parameter: " << *AP << "\n";
 			if (!afterActualIn) {
 				afterActualIn = 1;
+				errs() << "current actual parameter: " << *(AP->getCallSite()->getCallSite()) << "\n";
 				TResult.TaintedCallBases.push_back(AP->getCallSite()->getCallSite());
 			}
 		}
-
-		if (handledNodes.count(backPair)) {
-			continue;
-		}
-		handledNodes.insert(backPair);
 
 		const Value* valNode = VFGNode2LLVMValue(vfgNode);
 		const Value* predValNode = nullptr;
@@ -179,6 +202,24 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 		// 		TResult.BlindedPtrArg.insert(valNode);
 		// 	}
 		// }
+
+		// We briefly handle def-use of blinded pointers here
+		// If we store blinded data into a pointer, then this pointer also becomes blinded
+		if (const SVF::StoreVFGNode* storeNode = dyn_cast<const SVF::StoreVFGNode>(vfgNode)) {
+			const Value* Instr = storeNode->getPAGEdge()->getValue();
+			assert(Instr && "Failed to retrieve value from storevfgnode!");
+			if (const StoreInst* storeInstr = dyn_cast<const StoreInst>(Instr)) {
+				if (TResult.TaintedValues.count(storeInstr->getValueOperand())) {
+					// if (!afterActualIn) {
+						TResult.TaintedPointers.insert(storeInstr->getPointerOperand());
+						propagateTaintedPointers(storeInstr->getPointerOperand());
+						propagatePointers = true;
+					// }
+				}
+			}
+		}
+		// If we load from a multi-layer blinded pointer, the loaded value is also a blinded pointer (this case is handled later)
+		// If we use use blinded pointer as arithmetic operand
 
 		if (valNode != nullptr){
 			propagateDefUse = true;
@@ -201,6 +242,11 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 						continue;
 					}
 					if (PO->getType()->isPointerTy() && PO->getType()->getContainedType(0)->isPointerTy()) {
+						// if (!afterActualIn) {
+							TResult.TaintedPointers.insert(LI);
+							propagateTaintedPointers(LI);
+						// }
+						// propagatePointers = true;
 						propagateDefUse = false;
 					}
 			}
@@ -213,6 +259,11 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 			else if (predValNode != nullptr && !TResult.TaintedValues.count(predValNode)) {
 				propagateDefUse = false;
 			}
+			if (TResult.TaintedPointers.count(valNode) && valNode->getType()->isPointerTy()) {
+				// if (!afterActualIn) {
+					propagateTaintedPointers(valNode);
+				// }
+			}
 			if (propagateDefUse) {
 				addTaintedValue(valNode);
 				tempCtr++;
@@ -224,13 +275,15 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 				for (auto valUser : valNode->users()) {
 					const Value* valUserVal = dyn_cast<Value>(valUser);
 					Value* NValUserVal = const_cast<Value*>(valUserVal);
+					// handle blinded data
 					if (isa<Instruction>(NValUserVal)
 							&& !isa<StoreInst>(NValUserVal) && !isa<ReturnInst>(NValUserVal) && !isa<CallBase>(NValUserVal)) {
 						const SVF::VFGNode* userVFGNode = LLVMValue2VFGNode(NValUserVal);
 						if (NValUserVal != nullptr) {
 							if (!handledNodes.count({vfgNode, userVFGNode})) {
-								vfgNodeWorkList.push_back({vfgNode, userVFGNode});
-								ActualInTimes.push_back(afterActualIn);
+								handledNodes.insert({vfgNode, userVFGNode});
+								vfgNodeWorkList.push({vfgNode, userVFGNode});
+								ActualInTimes.push(afterActualIn);
 								#ifdef TRACEBACK_BLINDED
 								TResult.TTGraph[userVFGNode].push_back(vfgNode);
 								#endif
@@ -246,8 +299,9 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 			SVF::VFGNode *dstNode = edge->getDstNode();
 
 			if (!handledNodes.count({vfgNode, dstNode})) {
-				vfgNodeWorkList.push_back({vfgNode, dstNode});
-				ActualInTimes.push_back(afterActualIn);
+				handledNodes.insert({vfgNode, dstNode});
+				vfgNodeWorkList.push({vfgNode, dstNode});
+				ActualInTimes.push(afterActualIn);
 				#ifdef TRACEBACK_BLINDED
 				TResult.TTGraph[dstNode].push_back(vfgNode);
 				#endif
@@ -258,6 +312,30 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 }
 
 void BlindedTaintTracking::markInstrsForConversion(bool clear) {
+	for (auto Val : TResult.TaintedPointers) {
+		if (Val == nullptr) {
+			continue;
+		}
+		// errs() << "Fetching pts for blinded pointers: " << *Val << "\n";
+		SVF::NodeID pNodeId = ander->getPAG()->getValueNode(Val);
+    const SVF::NodeBS& pts = ander->getPts(pNodeId);
+		for (auto it = pts.begin(); it != pts.end(); it++) {
+			if (!pag->hasGNode(*it)) {
+				// errs() << "\n No pag Node for " << *it << "\n";
+				continue;
+			}
+			auto pagNode = pag->getPAGNode(*it);
+			if (SVF::SVFUtil::isa<SVF::DummyValPN>(pagNode)
+					|| pagNode->getNodeKind() == SVF::PAGNode::DummyValNode
+					|| pagNode->getNodeKind() == SVF::PAGNode::DummyObjNode) {
+				// errs() << "\n pagnode is dummyvalpn " << "*it" << "\n";
+				continue;
+			}
+
+			TResult.TaintedObjectsIDs.insert(*it);
+		}
+	}
+
 	for (auto Val : TResult.TaintedValues) {
 		for (auto U : Val->users()) {
 			auto ValUser = dyn_cast<Instruction>(U);
@@ -279,9 +357,6 @@ void BlindedTaintTracking::markInstrsForConversion(bool clear) {
 					TResult.BlndMemOp.push_back(SInst);
 				}
 			}
-			// else if (const GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(ValUser)) {
-			// 	TResult.BlndGep.push_back(GEPInst);
-			// }
 			else if (const SelectInst* SelInst = dyn_cast<SelectInst>(ValUser)) {
 				TResult.BlndSelect.push_back(SelInst);
 			}
@@ -301,6 +376,8 @@ void BlindedTaintTracking::extractTaintSource(Function &F) {
 			// if the formal parameter is a non-pointer type, it should also be a tainted value
 			if (!Arg->getType()->isPointerTy()) {
 				TResult.TaintedValues.insert(Arg);
+			} else {
+				TResult.TaintedPointers.insert(Arg);
 			}
 		}
 	}
@@ -315,6 +392,7 @@ void BlindedTaintTracking::extractTaintSource(Module &M) {
 			// errs() << "Marking global variable: " << GV.getName() << "\n";
 			assert(taintedGVNode != nullptr && ("Failed to fetch VFGNode from taintedGlobal " + GV.getName().str()).c_str());
 			TaintSource.push_back(taintedGVNode);
+			TResult.TaintedPointers.insert(&(*I));
 		}
 	}
 

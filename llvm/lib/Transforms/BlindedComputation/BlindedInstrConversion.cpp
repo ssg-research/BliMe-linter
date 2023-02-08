@@ -199,6 +199,8 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
 
   Type *GEPPtrType = GEP->getSourceElementType();
   auto GEPName = GEP->getPointerOperand()->getName();
+  errs() << "GEP: " << *GEP << "\n";
+  errs() << "store: " << *SI << "\n";
 
   if (GEPPtrType->isArrayTy()) {
     // TODO: to 'real' element num
@@ -214,12 +216,12 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
 
     LLVMContext &Context = SI->getContext();
     BasicBlock *LoopHeaderBB = SI->getParent();
-    Instruction *PrevInst = SI->getPrevNode();
+    Instruction *NextInst = SI->getNextNode();
 
     // ensures splitBasicBlock always works
     // assert(NextInst->getNextNode());
     assert(LoopHeaderBB->getTerminator());
-    BasicBlock *AfterLoopBB = LoopHeaderBB->splitBasicBlock(SI,
+    BasicBlock *AfterLoopBB = LoopHeaderBB->splitBasicBlock(NextInst,
                                                             GEPName + ".store.after.loop");
 
     // check we still have a terminator after split
@@ -305,7 +307,7 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
 
     // updateGEPAddrUsers(GEP, SelectRes);
     // SI->replaceAllUsesWith(SelectRes);
-    // SI->eraseFromParent();
+    SI->eraseFromParent();
     if (GEP->user_empty()) {
       GEP->eraseFromParent();
     }
@@ -320,6 +322,7 @@ static bool expandBlindedArrayAccesses(Module &M,
 // TODO: Add gep into worklist ->
   std::vector<LoadInst*> loadWorkList;
   std::vector<StoreInst*> storeWorkList;
+  std::set<StoreInst*> visited;
   for (auto Instr : RT.BlndMemOp) {
     Value* NCInstr = const_cast<Value*>(Instr);
     if (LoadInst *LI = dyn_cast<LoadInst>(NCInstr)) {
@@ -333,10 +336,13 @@ static bool expandBlindedArrayAccesses(Module &M,
   while (!storeWorkList.empty()) {
     auto SI = storeWorkList.back();
     storeWorkList.pop_back();
+    if (visited.count(SI)) {
+      continue;
+    }
+    visited.insert(SI);
     Value* PO = SI->getPointerOperand();
 
     if (GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(PO)) {
-      errs() << "GEP " << *GEPInstr << "\n";
       for (auto Idx = GEPInstr->idx_begin(); Idx != GEPInstr->idx_end(); Idx++) {
         if (RT.TaintedValues.count(*Idx)) {
           GetElementPtrInst* NGEPInstr = const_cast<GetElementPtrInst*>(GEPInstr);

@@ -8,13 +8,13 @@ using namespace llvm;
 BlindedDataUsage::BlindedDataUsage(Module &M, ModuleAnalysisManager &AM) {
   auto TRS = AM.getResult<BlindedTaintTracking>(M);
 
-	for (auto Inst : TRS.BlndBr) {
-		errs() << "invalid use of blinded data as operand of branchInst!\n";
-		errs() << *Inst << "\n";
-    Inst->print(errs());
-    std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("Invalid use of blinded data as operand of BranchInst!"));
-    Violations.insert(Violation_Instance);
-	}
+	// for (auto Inst : TRS.BlndBr) {
+	// 	errs() << "invalid use of blinded data as operand of branchInst!\n";
+	// 	errs() << *Inst << "\n";
+  //   Inst->print(errs());
+  //   std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("Invalid use of blinded data as operand of BranchInst!"));
+  //   Violations.insert(Violation_Instance);
+	// }
   int statStore = 0, statLoad = 0;
 	for (auto Inst : TRS.BlndMemOp) {
 		if (isa<LoadInst>(Inst)) {

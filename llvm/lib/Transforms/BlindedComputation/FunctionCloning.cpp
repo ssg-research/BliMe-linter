@@ -84,7 +84,7 @@ bool BlindedTTFC::callBaseCloning(CallBase *CB, TaintResult& TR) {
             continue;
           }
           errs() << "current pag: " << *pagNode->getValue() << "\n";
-          if (TR.TaintedValues.count(pagNode->getValue())) {
+          if (TR.TaintedObjectsIDs.count(*it)) {
             errs() << "\nTainted Node" << "\n";
             if (!paramBlinded) {
               changed = true;

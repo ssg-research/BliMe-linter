@@ -26,9 +26,10 @@ public:
 	std::vector<const Value*> BlndGep;
 	std::vector<const Value*> BlndMemOp;
 	std::vector<const Value*> BlndSelect;
-	std::set<const Value*> TaintedValues;
+	std::unordered_set<const Value*> TaintedValues;
+	std::unordered_set<const Value*> TaintedPointers;
+	std::unordered_set<long> TaintedObjectsIDs;
 	std::vector<const Instruction*> TaintedCallBases;
-	std::set<const SVF::VFGNode*> TaintedVFGNodes;
 	unordered_map<const SVF::VFGNode*, vector<const SVF::VFGNode*>> TTGraph;
 
 	SVF::Andersen* ander = nullptr;
@@ -80,6 +81,8 @@ private:
 	void clearResults();
 	bool hasViolation(Module& M);
 	void markInstrsForConversion(bool clear = false);
+
+	void propagateTaintedPointers(const Value* pointerValue);
 
 };
 
