@@ -481,7 +481,7 @@ void BlindedInstrConversionPass::transform(Module& M, ModuleAnalysisManager& AM)
       continue;
     }
 
-    // linearizeSelectInstructions(F);
+    linearizeSelectInstructions(F);
   }
   for (auto I : TTResult.BlndBr) {
     if (const BranchInst* BrInst = dyn_cast<BranchInst>(I)) {
@@ -505,7 +505,7 @@ void BlindedInstrConversionPass::validate(Module& M, ModuleAnalysisManager& AM) 
         // errs() << "\n" <<debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
         errs() << V.second.str().c_str() << "\n";
       }
-      // llvm_unreachable("validateBlindedData returns 'false'");
+      llvm_unreachable("validateBlindedData returns 'false'");
   }
 }
 
@@ -518,8 +518,6 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   auto FC = BlindedTTFC();
   FC.FuncCloning(M, AM);
   AM.invalidate(M, PreservedAnalyses::none());
-
-  // validate(M, AM);
 
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 

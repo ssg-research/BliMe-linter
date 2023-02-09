@@ -7,40 +7,44 @@ using namespace llvm;
 
 BlindedDataUsage::BlindedDataUsage(Module &M, ModuleAnalysisManager &AM) {
   auto TRS = AM.getResult<BlindedTaintTracking>(M);
+  int statBranch = 0;
 
-	// for (auto Inst : TRS.BlndBr) {
-	// 	errs() << "invalid use of blinded data as operand of branchInst!\n";
-	// 	errs() << *Inst << "\n";
-  //   Inst->print(errs());
-  //   std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("Invalid use of blinded data as operand of BranchInst!"));
-  //   Violations.insert(Violation_Instance);
-	// }
+	for (auto Inst : TRS.BlndBr) {
+		// errs() << "invalid use of blinded data as operand of branchInst!\n";
+		// errs() << *Inst << "\n";
+    statBranch++;
+    // Inst->print(errs());
+    std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("Invalid use of blinded data as operand of BranchInst!"));
+    Violations.insert(Violation_Instance);
+	}
   int statStore = 0, statLoad = 0;
 	for (auto Inst : TRS.BlndMemOp) {
 		if (isa<LoadInst>(Inst)) {
-			errs() << "loadInstr with a blinded pointer!\n";
-			errs() << *Inst << "\n";
+			// errs() << "loadInstr with a blinded pointer!\n";
+			// errs() << *Inst << "\n";
       statLoad++;
       // if (auto LI = dyn_cast<LoadInst>(Inst)) {
       //   const Value* lOperand = LI->getPointerOperand();
       //   TRS.backtrace(lOperand);
       // }
-      Inst->print(errs());
+      // Inst->print(errs());
       std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("LoadInst with a blinded pointer."));
       Violations.insert(Violation_Instance);
 		}
 		else if (isa<StoreInst>(Inst)) {
-      errs() << "storeInstr with a blinded pointer!\n";
-			errs() << *Inst << "\n";
+      // errs() << "storeInstr with a blinded pointer!\n";
+			// errs() << *Inst << "\n";
       statStore++;
-      Inst->print(errs());
+      // Inst->print(errs());
       std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("StoreInst with a blinded pointer."));
       Violations.insert(Violation_Instance);
 		}
 	}
+  errs() << "\n";
   errs() << "############stat info################" << "\n";
   errs() << "StoreInstr: " << statStore << "\n";
   errs() << "LoadInstr: " << statLoad << "\n";
+  errs() << "BranchInstr: " << statBranch << "\n";
   errs() << "############stat info end###########" << "\n";
 
 

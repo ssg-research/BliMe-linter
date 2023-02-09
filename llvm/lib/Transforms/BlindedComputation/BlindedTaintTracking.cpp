@@ -154,17 +154,15 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 		bool propagateDefUse = false;
 		bool propagatePointers = false;
 
-		if (timer >= 2) {
-			if (printctr <= 5000) {
-				printctr++;
-				if (predVFGNode != nullptr) {
-					llvm::outs() << "predVFGNode is: " << predVFGNode->toString() << "\n";
-				}
-				llvm::outs() << "currentVFGNode is: " << vfgNode->toString() << "\n\n";
-			}
-		// if (true) {
-
-		}
+		// if (timer >= 2) {
+		// 	if (printctr <= 5000) {
+		// 		printctr++;
+		// 		if (predVFGNode != nullptr) {
+		// 			llvm::outs() << "predVFGNode is: " << predVFGNode->toString() << "\n";
+		// 		}
+		// 		llvm::outs() << "currentVFGNode is: " << vfgNode->toString() << "\n\n";
+		// 	}
+		// }
 
 		ActualInTimes.pop();
 		vfgNodeWorkList.pop();

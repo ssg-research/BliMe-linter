@@ -8,24 +8,8 @@ void BlindedTTFC::FuncCloning(Module &M, ModuleAnalysisManager& AM) {
   do {
     auto& TR = AM.getResult<BlindedTaintTracking>(M);
     changed = false;
-    // iterating the module while adding functions to the module:
-    // might cause undefined behavior
-    vector<Function*> WorkList;
 
-    // for (Function &F : M) {
-    //   if (F.isDeclaration()) {
-    //     continue;
-    //   }
-    //   for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
-    //     if (Arg->hasAttribute(Attribute::Blinded)) {
-    //       WorkList.push_back(&F);
-    //       break;
-    //     }
-    //   }
-    // }
-    // for (Function *F : WorkList) {
-    //   FuncCloning(*F, TR, TR.ander, changed);
-    // }
+    vector<Function*> WorkList;
 
     for (auto Instr : TR.TaintedCallBases) {
       const CallBase* CB = dyn_cast<CallBase>(Instr);
@@ -43,8 +27,6 @@ void BlindedTTFC::FuncCloning(Module &M, ModuleAnalysisManager& AM) {
     AM.invalidate(M, PreservedAnalyses::none());
   } while (changed);
   auto &TR = AM.getResult<BlindedTaintTracking>(M);
-
-  errs() << "done==================================\n";
 
 }
 
