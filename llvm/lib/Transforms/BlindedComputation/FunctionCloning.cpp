@@ -5,16 +5,21 @@ using namespace::llvm;
 void BlindedTTFC::FuncCloning(Module &M, ModuleAnalysisManager& AM) {
 
   bool changed = false;
+  static int limit = 0;
   do {
     auto& TR = AM.getResult<BlindedTaintTracking>(M);
     changed = false;
 
     vector<Function*> WorkList;
+    limit++;
 
     for (auto Instr : TR.TaintedCallBases) {
       const CallBase* CB = dyn_cast<CallBase>(Instr);
       assert(CB && "SVF inserted nullptr callbase");
       CallBase* NCB = const_cast<CallBase*>(CB);
+      errs() << "\n callbase: " << *CB << "\n";
+      if (NCB->isIndirectCall()) continue;
+      if (NCB->isInlineAsm()) continue;
       if (!M.getFunction(NCB->getCalledFunction()->getName())) {
         continue;
       }
@@ -25,7 +30,7 @@ void BlindedTTFC::FuncCloning(Module &M, ModuleAnalysisManager& AM) {
     }
 
     AM.invalidate(M, PreservedAnalyses::none());
-  } while (changed);
+  } while (changed && limit <= 20);
   auto &TR = AM.getResult<BlindedTaintTracking>(M);
 
 }
@@ -104,19 +109,23 @@ bool BlindedTTFC::propagateBlindedArgumentFunctionCall(CallBase &CB, Function &F
     return false;
   }
 
-  string clonedPrefix = ".";
+  string clonedPrefix = "_cloned_";
+
   bool retVal = false;
-  size_t clonedPrefixPos = F.getName().find(clonedPrefix);
+  bool startsWithClonedPrefix = F.getName().startswith(clonedPrefix);
   StringRef originalName = F.getName();
 
-  if (clonedPrefixPos != StringRef::npos) {
-    originalName = originalName.substr(0, clonedPrefixPos);
+  if (startsWithClonedPrefix) {
+    size_t clonedSuffix = F.getName().rfind(".");
+    errs() << "ClonedSuffix: " << clonedSuffix << "\n";
+    originalName = originalName.substr(8, clonedSuffix - 8);
   }
+  errs() << "Original Name: " <<  originalName << "\n";
 
 
   // Generate blinded identifier of type NAME.BITMAP, where the BITMAP has a 1
   // for the position (starting from right) of blinded arguments.
-  Twine NewName = originalName + clonedPrefix + Twine(arrToBitmap(ParamNos));
+  Twine NewName = clonedPrefix + originalName + "." + Twine(arrToBitmap(ParamNos));
 
   SmallString<128> NameVec;
   auto *BlindedFunc = F.getParent()->getFunction(NewName.toStringRef(NameVec));

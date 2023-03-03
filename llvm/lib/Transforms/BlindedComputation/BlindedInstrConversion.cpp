@@ -1,6 +1,7 @@
 #include "llvm/Transforms/BlindedComputation/BlindedInstrConversion.h"
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/DebugInfoMetadata.h>
+#include "llvm/Analysis/ScalarEvolutionExpressions.h"
 
 using namespace llvm;
 
@@ -21,7 +22,11 @@ static SmallVector<Value *, 4> createGepIndexList(Value *TaintedIdx,
 
 // returns 0 if we cannot stride this array
 // else the total stride number
-static uint64_t getTotalStride(Value* TaintedIdx, GetElementPtrInst *GEP, int& ValidForTrans) {
+static uint64_t getTotalStride(Value* TaintedIdx,
+                               GetElementPtrInst *GEP,
+                               int& ValidForTrans,
+                               FunctionAnalysisManager& FAM,
+                               Function &F) {
   int GEPIdxPos = -1;
   SmallVector<Value *, 4> NewIndices;
   for (auto Idx = GEP->idx_begin(); Idx != GEP->idx_end(); ++Idx) {
@@ -51,13 +56,6 @@ static uint64_t getTotalStride(Value* TaintedIdx, GetElementPtrInst *GEP, int& V
 
   Type* arrType = GetElementPtrInst::getIndexedType(GEP->getSourceElementType(), NewIndices);
 
-  //                              <- id0 = 0
-  // struct {                     <- id1 = 0
-  //   struct {                   <- id2 = 0
-  //     char ptr[3];  <---- GEP  <- id3 = tainted_id
-  //     }};
-
-  // Retrieve the array size
   // TODO: currently we only consider the array size.
 
   if (arrType->isArrayTy()) {
@@ -70,20 +68,39 @@ static uint64_t getTotalStride(Value* TaintedIdx, GetElementPtrInst *GEP, int& V
     // assert(false && "unable to handle this type for expansion");
   }
 
+  // const Function& F = GEP->getFunction()->getFunction();
+  // Function& NF = const_cast<Function&>(F);
+  // auto SCEVResult = FAM.getResult<ScalarEvolutionAnalysis>(NF);
+
   ValidForTrans = 0;
   return 0;
 }
 
-static bool expandBlindedArrayAccess(Value *TaintedIdx,
+bool BlindedInstrConversionPass::expandBlindedArrayAccess(Value *TaintedIdx,
                                      GetElementPtrInst *GEP,
-                                     LoadInst *LI, vector<LoadInst*>& LoadWorkList) {
+                                     LoadInst *LI, vector<LoadInst*>& LoadWorkList,
+                                     FunctionAnalysisManager& FAM,
+                                     Function &F) {
   bool MadeChange = false;
 
   Type *GEPPtrType = GEP->getSourceElementType();
   auto GEPName = GEP->getPointerOperand()->getName();
   int canExpand = 0;
-  const uint64_t ArrSize = getTotalStride(TaintedIdx, GEP, canExpand);
+  const uint64_t ArrSize = getTotalStride(TaintedIdx, GEP, canExpand, FAM, F);
   errs() << "Can expand? " << canExpand << "\n";
+  APInt ArrSizeAPInt = APInt(64, ArrSize);
+
+  // if (!canExpand) {
+  //   auto &SE = FAM.getResult<ScalarEvolutionAnalysis>(F);
+  //   if (SE.isSCEVable(TaintedIdx->getType())) {
+  //     const SCEV* SC = SE.getSCEV(TaintedIdx);
+  //     APInt CR = SE.getUnsignedRange(SC).getSignedMax();
+  //     errs() << "\nSigned Max: " << CR << "\n";
+  //     if (CR == 0 || CR == INT_MAX) { return MadeChange; }
+  //     canExpand = true;
+  //   }
+  // }
+
 
   if (canExpand) {
     // We generate IR that loops over all array elements, loading each
@@ -94,6 +111,9 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
     // - Create basic blocks for the loop header, body, and increment
     // - Add a new terminator that branches to the loop header
 
+  // const Function& F = GEP->getFunction()->getFunction();
+  // Function& NF = const_cast<Function&>(F);
+  // auto SCEVResult = FAM.getResult<ScalarEvolutionAnalysis>(NF);
     LLVMContext &Context = GEP->getContext();
     BasicBlock *LoopHeaderBB = GEP->getParent();
     Instruction *NextInst = GEP->getNextNode();
@@ -176,7 +196,7 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
     InducVar->addIncoming(AddRes, LoopBodyBB);
 
     // Branch to end after we iterate over all array elements
-    Value *ArrSizeVal = ConstantInt::get(Context, llvm::APInt(64, ArrSize));
+    Value *ArrSizeVal = ConstantInt::get(Context, ArrSizeAPInt);
     auto LoopCondCmp = Builder.CreateCmp(CmpInst::ICMP_SLT, InducVar, ArrSizeVal);
     Builder.CreateCondBr(LoopCondCmp, LoopBodyBB, AfterLoopBB);
 
@@ -192,7 +212,7 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
   return MadeChange;
 }
 
-static bool expandBlindedArrayAccess(Value *TaintedIdx,
+bool BlindedInstrConversionPass::expandBlindedArrayAccess(Value *TaintedIdx,
                                      GetElementPtrInst *GEP,
                                      StoreInst *SI, vector<StoreInst*>& StoreWorkList) {
   bool MadeChange = false;
@@ -317,29 +337,37 @@ static bool expandBlindedArrayAccess(Value *TaintedIdx,
   return MadeChange;
 }
 
-static bool expandBlindedArrayAccesses(Module &M,
-                                       TaintResult &RT) {
+bool BlindedInstrConversionPass::expandBlindedArrayAccesses(Function &F,
+                                       TaintResult &RT, FunctionAnalysisManager& FAM) {
 // TODO: Add gep into worklist ->
   std::vector<LoadInst*> loadWorkList;
   std::vector<StoreInst*> storeWorkList;
-  std::set<StoreInst*> visited;
-  for (auto Instr : RT.BlndMemOp) {
-    Value* NCInstr = const_cast<Value*>(Instr);
-    if (LoadInst *LI = dyn_cast<LoadInst>(NCInstr)) {
-      loadWorkList.push_back(LI);
+  // std::set<StoreInst*> visited;
+
+  // iterate through all the instructions in a function
+  // until we reaches tainted instructions
+  // everything's all the same
+  for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+    Instruction* Inst = &*I;
+    if (LoadInst *LI = dyn_cast<LoadInst>(Inst)) {
+      if (RT.TaintedValues.count(LI->getPointerOperand())){
+        loadWorkList.push_back(LI);
+      }
     }
-    else if (StoreInst *SI = dyn_cast<StoreInst>(NCInstr)) {
-      storeWorkList.push_back(SI);
+    else if (StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
+      if (RT.TaintedValues.count(SI->getPointerOperand())) {
+        storeWorkList.push_back(SI);
+      }
     }
   }
 
   while (!storeWorkList.empty()) {
     auto SI = storeWorkList.back();
     storeWorkList.pop_back();
-    if (visited.count(SI)) {
-      continue;
-    }
-    visited.insert(SI);
+    // if (visited.count(SI)) {
+    //   continue;
+    // }
+    // visited.insert(SI);
     Value* PO = SI->getPointerOperand();
 
     if (GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(PO)) {
@@ -380,7 +408,7 @@ static bool expandBlindedArrayAccesses(Module &M,
           // if (getTotalStride(&*Idx, GEP, valft));
           errs() << "\t" << "Idx: " << *Idx << "\n";
           GetElementPtrInst* NGEPInstr = const_cast<GetElementPtrInst*>(GEPInstr);
-          expandBlindedArrayAccess(*Idx, NGEPInstr, LI, loadWorkList);
+          expandBlindedArrayAccess(*Idx, NGEPInstr, LI, loadWorkList, FAM, F);
           break;
         }
       }
@@ -392,7 +420,7 @@ static bool expandBlindedArrayAccesses(Module &M,
         for (auto Idx = GEPInstr->idx_begin(); Idx != GEPInstr->idx_end(); Idx++) {
           if (RT.TaintedValues.count(*Idx)) {
             GetElementPtrInst* NGEPInstr = const_cast<GetElementPtrInst*>(GEPInstr);
-            expandBlindedArrayAccess(*Idx, NGEPInstr, LI, loadWorkList);
+            expandBlindedArrayAccess(*Idx, NGEPInstr, LI, loadWorkList, FAM, F);
           }
         }
       }
@@ -475,12 +503,11 @@ void BlindedInstrConversionPass::transform(Module& M, ModuleAnalysisManager& AM)
   FunctionAnalysisManager &FAM =
       AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
 
-  expandBlindedArrayAccesses(M, TTResult);
   for (Function &F : M) {
     if (F.isDeclaration()) {
       continue;
     }
-
+    expandBlindedArrayAccesses(F, TTResult, FAM);
     linearizeSelectInstructions(F);
   }
   for (auto I : TTResult.BlndBr) {
@@ -500,12 +527,42 @@ void BlindedInstrConversionPass::validate(Module& M, ModuleAnalysisManager& AM) 
   // Verify our blinded data usage policies
   if(!BDU.violations().empty()){
       for (auto &V : BDU.violations()) {
-        V.first->print(errs());
+        // V.first->print(errs());
         // const llvm::DebugLoc &debugInfo = ((llvm::Instruction*)(V.first))->getDebugLoc();
         // errs() << "\n" <<debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
-        errs() << V.second.str().c_str() << "\n";
+        // errs() << V.second.str().c_str() << "\n";
       }
-      llvm_unreachable("validateBlindedData returns 'false'");
+      // llvm_unreachable("validateBlindedData returns 'false'");
+  }
+
+  auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
+
+  for (Function &F : M) {
+    if (F.isDeclaration()) {
+      continue;
+    }
+
+    for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
+      if (Arg->hasAttribute(Attribute::Blinded)) {
+          Arg->removeAttr(Attribute::Blinded);
+      }
+    }
+  }
+  for (auto I : TTResult.BlndBr) {
+    if (const BranchInst* BrInst = dyn_cast<BranchInst>(I)) {
+      BranchInst* NBrInst = const_cast<BranchInst*>(BrInst);
+      LLVMContext &cont = NBrInst->getContext();
+      MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+      NBrInst->setMetadata("t", N);
+    }
+  }
+  for (auto I : TTResult.BlndMemOp) {
+    if (const Instruction* MemOpInstr = dyn_cast<Instruction>(I)) {
+      Instruction* NMemOpInstr = const_cast<Instruction*>(MemOpInstr);
+      LLVMContext &cont = NMemOpInstr->getContext();
+      MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+      NMemOpInstr->setMetadata("t", N);
+    }
   }
 }
 

@@ -170,7 +170,7 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 
 		if (auto CB = SVF::SVFUtil::dyn_cast<SVF::ActualINSVFGNode>(vfgNode)) {
 			if (!afterActualIn) {
-				errs() << "current CB: " << *CB << "\n";
+				// errs() << "current CB: " << *CB << "\n";
 
 				afterActualIn = 1;
 				TResult.TaintedCallBases.push_back(CB->getCallSite()->getCallSite());
@@ -179,7 +179,7 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 		else if (auto AP = SVF::SVFUtil::dyn_cast<SVF::ActualParmSVFGNode>(vfgNode)) {
 			if (!afterActualIn) {
 				afterActualIn = 1;
-				errs() << "current actual parameter: " << *(AP->getCallSite()->getCallSite()) << "\n";
+				// errs() << "current actual parameter: " << *(AP->getCallSite()->getCallSite()) << "\n";
 				TResult.TaintedCallBases.push_back(AP->getCallSite()->getCallSite());
 			}
 		}
