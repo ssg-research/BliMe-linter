@@ -11,8 +11,8 @@ noinline void move_blinded(void) {
 	out =  blinded_in;
 }
 
-// CHECK: loadInstr with a blinded pointer!
 // CHECK: %2 = load i8, i8* %arrayidx1
+// CHECK: loadInstr with a blinded pointer!
 int main(int argc, char **argv) {
 	move_blinded();
 	

@@ -3,11 +3,11 @@
 int arr[100];
 
 // We expect to have 6 new variants of this function!
-// CHECK-LABEL: define {{.*}} @accessArray{{\.[a-z0-9]+}}(
-// CHECK-LABEL: define {{.*}} @accessArray{{\.[a-z0-9]+}}(
-// CHECK-LABEL: define {{.*}} @accessArray{{\.[a-z0-9]+}}(
-// CHECK-LABEL: define {{.*}} @accessArray{{\.[a-z0-9]+}}(
-// CHECK-LABEL: define {{.*}} @accessArray{{\.[a-z0-9]+}}(
+// CHECK-LABEL: define {{.*}} @_cloned_accessArray{{\.[a-z0-9]+}}(
+// CHECK-LABEL: define {{.*}} @_cloned_accessArray{{\.[a-z0-9]+}}(
+// CHECK-LABEL: define {{.*}} @_cloned_accessArray{{\.[a-z0-9]+}}(
+// CHECK-LABEL: define {{.*}} @_cloned_accessArray{{\.[a-z0-9]+}}(
+// CHECK-LABEL: define {{.*}} @_cloned_accessArray{{\.[a-z0-9]+}}(
 __attribute__((noinline))
 int accessArray(int idx, int idx2, int idx3) {
 	return arr[idx] + arr[idx2] + arr[idx3];

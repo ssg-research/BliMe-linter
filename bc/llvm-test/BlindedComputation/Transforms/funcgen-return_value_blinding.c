@@ -27,11 +27,11 @@ int transform(int idx, int scale, int offset) {
 
 // We should se one unblinded and one blinded sink call here
 // CHECK-LABEL: @test
-// CHECK: call {{.*}} @transform.{{[a-z0-9]+}}(
-// CHECK: call {{.*}} @zero.{{[a-z0-9]+}}(
+// CHECK: call {{.*}} @_cloned_transform.{{[a-z0-9]+}}(
+// CHECK: call {{.*}} @_cloned_zero.{{[a-z0-9]+}}(
 // CHECK: call {{.*}} @sink(
-// CHECK: call {{.*}} @transform.{{[a-z0-9]+}}(
-// CHECK: call {{.*}} @sink.{{[a-z0-9]+}}(
+// CHECK: call {{.*}} @_cloned_transform.{{[a-z0-9]+}}(
+// CHECK: call {{.*}} @_cloned_sink.{{[a-z0-9]+}}(
 // CHECK: ret i32 57687
 int test(blinded int idx) {
   // We expect the zero function to not return a blind value!

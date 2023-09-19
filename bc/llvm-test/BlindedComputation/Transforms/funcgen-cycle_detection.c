@@ -6,12 +6,12 @@
 // variants are identical with the exception of the transfrom() function.
 
 // Expect to get new variants for the following functions:
-// CHECK-DAG: define dso_local i32 @accessArray.{{[a-z0-9]+}}(
-// CHECK-DAG: define dso_local i32 @accessArray_no_cycle.{{[a-z0-9]+}}(
-// CHECK-DAG: define dso_local i32 @transform.{{[a-z0-9]+}}(
-// CHECK-DAG: define dso_local i32 @transform_no_cycle.{{[a-z0-9]+}}(
-// CHECK-DAG: define dso_local i32 @useKey.{{[a-z0-9]+}}(
-// CHECK-DAG: define dso_local i32 @useKey_no_cycle.{{[a-z0-9]+}}(
+// CHECK-DAG: define dso_local i32 @_cloned_accessArray.{{[a-z0-9]+}}(
+// CHECK-DAG: define dso_local i32 @_cloned_accessArray_no_cycle.{{[a-z0-9]+}}(
+// CHECK-DAG: define dso_local i32 @_cloned_transform.{{[a-z0-9]+}}(
+// CHECK-DAG: define dso_local i32 @_cloned_transform_no_cycle.{{[a-z0-9]+}}(
+// CHECK-DAG: define dso_local i32 @_cloned_useKey.{{[a-z0-9]+}}(
+// CHECK-DAG: define dso_local i32 @_cloned_useKey_no_cycle.{{[a-z0-9]+}}(
 
 #define noinline __attribute__((noinline))
 

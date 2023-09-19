@@ -38,8 +38,8 @@ noinline int need_blind_var(int i) {
 // Expect both calls to need_blind_var to have been converted!
 //
 // CHECK-LABEL: @simpleTest
-// CHECK-DAG: call i32 @need_blind_var.1
-// CHECK-DAG: call i32 @need_blind_var.1
+// CHECK-DAG: call i32 @_cloned_need_blind_var.1
+// CHECK-DAG: call i32 @_cloned_need_blind_var.1
 // CHECK-DAG: call i32 @gimme_blind_a1
 // CHECK-DAG: call i32 @gimme_blind_b1
 // CHECK: ret i32
@@ -56,7 +56,7 @@ int gimme_blind_b4(int i) { return g_blinded + i; }
 // variant of need_blinded_var!
 //
 // CHECK-LABEL: define {{.*}} @sanityCheck
-// CHECK-LABEL: define {{.*}} @need_blind_var{{\.[a-z0-9]+}}(
+// CHECK-LABEL: define {{.*}} @_cloned_need_blind_var{{\.[a-z0-9]+}}(
 int sanityCheck() {
   return need_blind_var(g_blinded);
 }
