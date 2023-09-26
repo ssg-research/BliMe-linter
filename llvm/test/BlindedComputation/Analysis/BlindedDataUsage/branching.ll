@@ -1,4 +1,4 @@
-; RUN: FileCheck %s < <(opt -passes="blinded-instr-conv" -S < %s 2>&1)
+; RUN: FileCheck %s < <(opt -passes="print<blinded-data-usage>" -S < %s 2>&1)
 
 ; CHECK: Invalid use of blinded data as operand of BranchInst!
 

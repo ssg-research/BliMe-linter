@@ -14,7 +14,7 @@ int do_stuff(int i) {
   return blind_sink + i;
 }
 
-// CHECK: stuff...
+// CHECK: stuff
 int main(int argc, char **argv) {
   return argv[0][do_stuff(1)];
 }

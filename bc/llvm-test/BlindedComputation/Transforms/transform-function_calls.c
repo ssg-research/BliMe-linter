@@ -19,7 +19,7 @@ noinline int get_blinded_defined(int i) {
 }
 
 // CHECK-LABEL: @test_defined
-// CHECK: call{{.*}}@get_blinded_defined.1
+// CHECK: call{{.*}}@_cloned_get_blinded_defined.1
 int test_defined(blinded int a) {
   int l_blinded = g_blinded;
   return get_blinded_defined(l_blinded);

@@ -1,6 +1,6 @@
-; RUN: FileCheck %s < <(opt -passes="blinded-instr-conv" -S < %s 2>&1)
+; RUN: FileCheck %s < <(opt -passes="print<blinded-data-usage>" -S < %s 2>&1)
 
-; CHECK: LoadInst with a blinded pointer.
+; CHECK: loadInstr with a blinded pointer!
 
 @n = dso_local global i32 50, align 4
 @arr = dso_local global i8* null, align 8
