@@ -30,10 +30,14 @@
 #ifndef POINTERANALYSIS_H_
 #define POINTERANALYSIS_H_
 
+#include <unistd.h>
+#include <signal.h>
+
 #include "llvm/Analysis/SVF/Graphs/PAG.h"
 #include "llvm/Analysis/SVF/MemoryModel/ConditionalPT.h"
 #include "llvm/Analysis/SVF/MemoryModel/AbstractPointsToDS.h"
 #include "llvm/Analysis/SVF/MemoryModel/MutablePointsToDS.h"
+#include "llvm/Analysis/SVF/MemoryModel/PersistentPointsToDS.h"
 #include "llvm/Analysis/SVF/Graphs/PTACallGraph.h"
 #include "llvm/Analysis/SVF/Util/SCC.h"
 #include "llvm/Analysis/SVF/Util/PathCondAllocator.h"
@@ -161,6 +165,10 @@ protected:
     TypeSystem *typeSystem;
 
 public:
+	/// Get ICFG
+	inline ICFG* getICFG() const {
+		return pag->getICFG();
+	}
     /// Return number of resolved indirect call edges
     inline Size_t getNumOfResolvedIndCallEdge() const
     {

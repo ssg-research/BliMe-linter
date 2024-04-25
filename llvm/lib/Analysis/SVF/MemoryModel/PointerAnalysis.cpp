@@ -44,6 +44,9 @@
 #include "llvm/Analysis/SVF/MemoryModel/PTAType.h"
 #include "llvm/Analysis/SVF/Graphs/ExternalPAG.h"
 #include "llvm/Analysis/SVF/WPA/FlowSensitiveTBHC.h"
+
+#include <iomanip>
+#include <iostream>
 #include <fstream>
 #include <sstream>
 
@@ -207,7 +210,9 @@ void PointerAnalysis::dumpStat()
 {
 
     if(print_stat && stat)
+    {
         stat->performStat();
+    }
 }
 
 /*!

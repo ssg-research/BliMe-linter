@@ -24,6 +24,25 @@ namespace SVF
         llvm::cl::init(512),
         llvm::cl::desc("Maximum number of fields for field sensitive analysis"));
 
+    const llvm::cl::opt<BVDataPTAImpl::PTBackingType> Options::ptDataBacking(
+        "ptd",
+        llvm::cl::init(BVDataPTAImpl::PTBackingType::Mutable),
+        llvm::cl::desc("Overarching points-to data structure"),
+        llvm::cl::values(
+            clEnumValN(BVDataPTAImpl::PTBackingType::Mutable, "mutable", "points-to set per pointer"),
+            clEnumValN(BVDataPTAImpl::PTBackingType::Persistent, "persistent", "points-to set ID per pointer, operations hash-consed")));
+
+    const llvm::cl::opt<unsigned> Options::FsTimeLimit(
+        "fs-time-limit",
+        llvm::cl::init(0),
+        llvm::cl::desc("time limit for main phase of flow-sensitive analyses")
+    );
+
+    const llvm::cl::opt<unsigned> Options::AnderTimeLimit(
+        "ander-time-limit",
+        llvm::cl::init(0),
+        llvm::cl::desc("time limit for Andersen's analyses (ignored when -fs-time-limit set)")
+    );
 
     // ContextDDA.cpp
     const llvm::cl::opt<unsigned long long> Options::CxtBudget(
@@ -239,7 +258,7 @@ namespace SVF
 
     const llvm::cl::opt<bool> Options::PStat(
         "stat", 
-        llvm::cl::init(false),
+        llvm::cl::init(true),
         llvm::cl::desc("Statistic for Pointer analysis")
     );
 
@@ -339,10 +358,14 @@ namespace SVF
         llvm::cl::desc("Please specify which function needs to be dumped")
     );
 
-    const llvm::cl::opt<std::string> Options::MemPar(
+    const llvm::cl::opt<MemSSA::MemPartition> Options::MemPar(
         "mem-par", 
-        llvm::cl::value_desc("memory-partition-type"),
-        llvm::cl::desc("memory partition strategy")
+        llvm::cl::init(MemSSA::MemPartition::IntraDisjoint),
+        llvm::cl::desc("Memory region partiion strategies (e.g., for SVFG construction)"),
+        llvm::cl::values(
+            clEnumValN(MemSSA::MemPartition::Distinct, "distinct", "memory region per each object"),
+            clEnumValN(MemSSA::MemPartition::IntraDisjoint, "intra-disjoint", "memory regions partioned based on each function"),
+            clEnumValN(MemSSA::MemPartition::InterDisjoint, "inter-disjoint", "memory regions partioned across functions"))
     );
 
 
@@ -438,9 +461,15 @@ namespace SVF
     
     // MTAResultValidator.cpp
     const llvm::cl::opt<bool> Options::PrintValidRes(
-        "print-mhp-validation", 
+        "mhp-validation", 
         llvm::cl::init(false), 
         llvm::cl::desc("Print MHP Validation Results")
+    );
+    // LockResultValidator.cpp
+    const llvm::cl::opt<bool> Options::LockValid(
+        "lock-validation", 
+        llvm::cl::init(false), 
+        llvm::cl::desc("Print Lock Validation Results")
     );
 
 
@@ -681,6 +710,4 @@ namespace SVF
             clEnumValN(WPAPass::Conservative, "conservative", "return MayAlias if any pta says alias"),
             clEnumValN(WPAPass::Veto, "veto", "return NoAlias if any pta says no alias")
         ));
-
-    
-}; // namespace SVF.
+} // namespace SVF.

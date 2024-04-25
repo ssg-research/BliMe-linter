@@ -1,3 +1,4 @@
+add_subdirectory(CUDD)
 
 # Due to a mutual dependencies, all the sub projects of the SVG are merged here
 # Otherwise it is impossible to load the dependencies in opt
@@ -8,8 +9,6 @@
 # else()
 #     llvm_map_components_to_libnames(llvm_libs bitwriter core ipo irreader instcombine instrumentation target linker analysis scalaropts support transformutils)
 # endif()
-add_subdirectory(CUDD)
-
 
 file (GLOB SOURCES
         SVF-FE/*.cpp
@@ -18,6 +17,7 @@ file (GLOB SOURCES
         MemoryModel/*.cpp
         MSSA/*.cpp
         WPA/*.cpp
+        MTA/*.cpp
         SABER/*.cpp
         DDA/*.cpp)
 
@@ -28,26 +28,11 @@ add_llvm_library(Svf STATIC ${SOURCES}
         DEPENDS
         intrinsics_gen)
 target_link_libraries(Svf ${llvm_libs} Cudd LLVMTransformUtils)
+# add_llvm_library(Svf STATIC ${SOURCES} LINK_LIBS Cudd ${Z3_LIBRARIES})
 
-# add_dependencies(Svf intrinsics_gen)
+# link_directories(${CMAKE_BINARY_DIR}/lib/Cudd ${Z3_EXTRA_LINK_DIRS})
 
-# add_llvm_library(Svf STATIC ${SOURCES} LINK_LIBS Cudd)
 
-# link_directories( ${CMAKE_BINARY_DIR}/lib/Cudd )
-
-# if (DEFINED Z3_DIR)
-#     set(ENV{Z3_DIR} "${Z3_DIR}")
+# if(DEFINED IN_SOURCE_BUILD)
+add_dependencies(Svf intrinsics_gen)
 # endif()
-
-# find_library(Z3_LIBRARIES NAMES libz3.a libz3.so
-#                           HINTS $ENV{Z3_DIR}
-#                           PATH_SUFFIXES lib bin)
-# find_path(Z3_INCLUDES NAMES z3++.h
-#                       HINTS $ENV{Z3_DIR}
-#                       PATH_SUFFIXES include z3)
-# if(NOT Z3_LIBRARIES OR NOT Z3_INCLUDES)
-#     message(FATAL_ERROR "Z3 not found!")
-# endif()
-# message(STATUS "Found Z3: ${Z3_LIBRARIES}")
-# message(STATUS "Z3 include dir: ${Z3_INCLUDES}")
-

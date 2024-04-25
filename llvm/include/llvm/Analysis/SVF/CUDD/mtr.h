@@ -89,7 +89,7 @@ extern "C" {
 #define MTR_INLINE
 #define MTR_UNUSED
 #endif
-#include <stdio.h>
+
 /* Flag definitions */
 #define MTR_DEFAULT	0x00000000
 #define MTR_TERMINAL	0x00000001

@@ -34,7 +34,6 @@
 #include "llvm/Analysis/SVF/Util/BasicTypes.h"
 #include "llvm/Analysis/SVF/Util/ExtAPI.h"
 #include "llvm/Analysis/SVF/Util/ThreadAPI.h"
-#include "llvm/Support/JSON.h"
 
 namespace SVF
 {
