@@ -58,17 +58,29 @@ void TaintResult::backtrace(const Value* valueNode) {
 }
 
 void BlindedTaintTracking::buildSVFG(Module &M) {
+	// M.dump();
+	std::cout << "Module name:\n" << M.getModuleIdentifier() << std::endl;
+	// std::vector<std::string> modules;
+	// modules.push_back(M.getModuleIdentifier());
+	// SVF::SVFModule* svfModule = SVF::LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(modules);
 	SVF::SVFModule* svfModule = SVF::LLVMModuleSet::getLLVMModuleSet()->buildSVFModule(M);
 	SVF::PAGBuilder pagBuilder;
 	pag = pagBuilder.build(svfModule);
 	ander = new SVF::Andersen(pag);
 	ander->analyze();
+	// steens = new SVF::Steensgaard(pag);
+	// steens->analyze();
+	std::time_t timestamp = std::time(nullptr);
+    std::cout << std::asctime(std::localtime(&timestamp)) << "\n";
+	std::cout << "Pointer analysis complete. Building SVFG...\n";
 	SVF::SVFGBuilder svfBuilder(true);
 	svfg = svfBuilder.buildFullSVFGWithoutOPT(ander);
+	// svfg = svfBuilder.buildFullSVFGWithoutOPT(steens);
+	// svfg->dump("svfg.dot");
 }
 
 void TaintResult::releaseSVFG() {
-	if (ander == nullptr) {
+	if (ander == nullptr && steens == nullptr) {
 		return;
 	}
 	SVF::LLVMModuleSet::releaseLLVMModuleSet();
@@ -124,6 +136,7 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 	static int timer = 0;
 	buildSVFG(M);
 	TResult.ander = ander;
+	TResult.steens = steens;
 	TResult.pag = pag;
 	TResult.svfg = svfg;
 	timer++;
@@ -290,7 +303,7 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 					}
 				}
 			}
-    }
+		}
 
 		for (auto it = vfgNode->OutEdgeBegin(), eit = vfgNode->OutEdgeEnd(); it != eit; ++it) {
 			SVF::VFGEdge *edge = *it;
@@ -307,6 +320,8 @@ void BlindedTaintTracking::buildTaintedSet(int iteration, Module& M) {
 			}
 		}
 	}
+
+	errs() << "Done processing vfgNodeWorkList\n";
 }
 
 void BlindedTaintTracking::markInstrsForConversion(bool clear) {
@@ -314,9 +329,9 @@ void BlindedTaintTracking::markInstrsForConversion(bool clear) {
 		if (Val == nullptr) {
 			continue;
 		}
-		// errs() << "Fetching pts for blinded pointers: " << *Val << "\n";
-		SVF::NodeID pNodeId = ander->getPAG()->getValueNode(Val);
-    const SVF::NodeBS& pts = ander->getPts(pNodeId);
+		errs() << "Fetching pts for blinded pointers: " << *Val << "\n";
+		SVF::NodeID pNodeId = (ander ? ander->getPAG() : steens->getPAG())->getValueNode(Val);
+		const SVF::NodeBS& pts = (ander ? ander->getPts(pNodeId) : steens->getPts(pNodeId));
 		for (auto it = pts.begin(); it != pts.end(); it++) {
 			if (!pag->hasGNode(*it)) {
 				// errs() << "\n No pag Node for " << *it << "\n";
@@ -326,10 +341,10 @@ void BlindedTaintTracking::markInstrsForConversion(bool clear) {
 			if (SVF::SVFUtil::isa<SVF::DummyValPN>(pagNode)
 					|| pagNode->getNodeKind() == SVF::PAGNode::DummyValNode
 					|| pagNode->getNodeKind() == SVF::PAGNode::DummyObjNode) {
-				// errs() << "\n pagnode is dummyvalpn " << "*it" << "\n";
+				// errs() << "\n pagnode is dummyvalpn " << *it << "\n";
 				continue;
 			}
-
+			// errs() << "Added element from pts: " << *it << "\n";
 			TResult.TaintedObjectsIDs.insert(*it);
 		}
 	}
@@ -368,13 +383,15 @@ void BlindedTaintTracking::extractTaintSource(Function &F) {
 	for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
 		if (Arg->hasAttribute(Attribute::Blinded)) {
 			const SVF::VFGNode* taintedArg = LLVMValue2VFGNode(Arg);
-			// errs() << "Marking formal parameter: " << Arg->getName() << "\n";
+			errs() << "Marking formal parameter: " << Arg->getName() << "\n";
 			assert(taintedArg != nullptr && ("Failed to fetch VFGNode from taintedArg " + Arg->getName().str()).c_str());
 			TaintSource.push_back(taintedArg);
 			// if the formal parameter is a non-pointer type, it should also be a tainted value
 			if (!Arg->getType()->isPointerTy()) {
+				errs() << "Added to tainted values\n";
 				TResult.TaintedValues.insert(Arg);
 			} else {
+				errs() << "Added to tainted pointers\n";
 				TResult.TaintedPointers.insert(Arg);
 			}
 		}
@@ -387,7 +404,7 @@ void BlindedTaintTracking::extractTaintSource(Module &M) {
 		GlobalVariable &GV = *I;
 		if (GV.hasAttribute(Attribute::Blinded)) {
 			const SVF::VFGNode* taintedGVNode = LLVMValue2VFGNode(&GV);
-			// errs() << "Marking global variable: " << GV.getName() << "\n";
+			errs() << "Marking global variable: " << GV.getName() << "\n";
 			assert(taintedGVNode != nullptr && ("Failed to fetch VFGNode from taintedGlobal " + GV.getName().str()).c_str());
 			TaintSource.push_back(taintedGVNode);
 			TResult.TaintedPointers.insert(&(*I));
@@ -468,6 +485,8 @@ TaintResult BlindedTaintTracking::run(Module& M, ModuleAnalysisManager &AM) {
 	// and marked tainted values
 	buildTaintedSet(0, M);
 	markInstrsForConversion();
+
+	errs() << "BlindedTaintTracking complete!\n";
 
 	return TResult;
 

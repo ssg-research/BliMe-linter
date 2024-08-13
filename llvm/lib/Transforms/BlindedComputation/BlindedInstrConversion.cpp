@@ -534,36 +534,40 @@ void BlindedInstrConversionPass::validate(Module& M, ModuleAnalysisManager& AM) 
       }
       // llvm_unreachable("validateBlindedData returns 'false'");
   }
+  
+  // std::error_code ec;
+  // raw_fd_ostream outFile("outbitcode.ll", ec);
+  // M.print(outFile, nullptr);
 
-  auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
+  // auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
 
-  for (Function &F : M) {
-    if (F.isDeclaration()) {
-      continue;
-    }
+  // for (Function &F : M) {
+  //   if (F.isDeclaration()) {
+  //     continue;
+  //   }
 
-    for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
-      if (Arg->hasAttribute(Attribute::Blinded)) {
-          Arg->removeAttr(Attribute::Blinded);
-      }
-    }
-  }
-  for (auto I : TTResult.BlndBr) {
-    if (const BranchInst* BrInst = dyn_cast<BranchInst>(I)) {
-      BranchInst* NBrInst = const_cast<BranchInst*>(BrInst);
-      LLVMContext &cont = NBrInst->getContext();
-      MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
-      NBrInst->setMetadata("t", N);
-    }
-  }
-  for (auto I : TTResult.BlndMemOp) {
-    if (const Instruction* MemOpInstr = dyn_cast<Instruction>(I)) {
-      Instruction* NMemOpInstr = const_cast<Instruction*>(MemOpInstr);
-      LLVMContext &cont = NMemOpInstr->getContext();
-      MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
-      NMemOpInstr->setMetadata("t", N);
-    }
-  }
+  //   for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
+  //     if (Arg->hasAttribute(Attribute::Blinded)) {
+  //         Arg->removeAttr(Attribute::Blinded);
+  //     }
+  //   }
+  // }
+  // for (auto I : TTResult.BlndBr) {
+  //   if (const BranchInst* BrInst = dyn_cast<BranchInst>(I)) {
+  //     BranchInst* NBrInst = const_cast<BranchInst*>(BrInst);
+  //     LLVMContext &cont = NBrInst->getContext();
+  //     MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+  //     NBrInst->setMetadata("t", N);
+  //   }
+  // }
+  // for (auto I : TTResult.BlndMemOp) {
+  //   if (const Instruction* MemOpInstr = dyn_cast<Instruction>(I)) {
+  //     Instruction* NMemOpInstr = const_cast<Instruction*>(MemOpInstr);
+  //     LLVMContext &cont = NMemOpInstr->getContext();
+  //     MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
+  //     NMemOpInstr->setMetadata("t", N);
+  //   }
+  // }
 }
 
 
@@ -576,9 +580,11 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
   FC.FuncCloning(M, AM);
   AM.invalidate(M, PreservedAnalyses::none());
 
+  errs() << "########## Function cloning complete ##########\n";
+
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
-  transform(M, AM);
+  // transform(M, AM);
   validate(M, AM);
 
   // errs() << "finished building TT...\n";

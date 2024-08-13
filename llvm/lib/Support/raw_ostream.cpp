@@ -890,6 +890,7 @@ raw_ostream &llvm::nulls() {
 //===----------------------------------------------------------------------===//
 //  raw_string_ostream
 //===----------------------------------------------------------------------===//
+uint64_t raw_string_ostream::current_pos() const { return OS.size(); }
 
 raw_string_ostream::~raw_string_ostream() {
   flush();

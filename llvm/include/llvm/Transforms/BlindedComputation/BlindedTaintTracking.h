@@ -6,6 +6,7 @@
 #include "llvm/Analysis/SVF/Graphs/VFG.h"
 #include "llvm/Analysis/SVF/WPA/WPAPass.h"
 #include "llvm/Analysis/SVF/WPA/Andersen.h"
+#include "llvm/Analysis/SVF/WPA/Steensgaard.h"
 #include "llvm/Analysis/SVF/Util/SVFUtil.h"
 #include "llvm/Analysis/SVF/Util/SVFModule.h"
 #include "llvm/Analysis/SVF/SVF-FE/LLVMUtil.h"
@@ -33,6 +34,7 @@ public:
 	unordered_map<const SVF::VFGNode*, vector<const SVF::VFGNode*>> TTGraph;
 
 	SVF::Andersen* ander = nullptr;
+	SVF::Steensgaard* steens = nullptr;
 	SVF::PAG* pag = nullptr;
 	SVF::SVFG* svfg = nullptr;
 
@@ -51,6 +53,7 @@ public:
 	// Constructor(s): initializes SVF
 	using Result = TaintResult;
 	SVF::Andersen* ander = nullptr;
+	SVF::Steensgaard* steens = nullptr;
 	SVF::PAG* pag = nullptr;
 	SVF::SVFG* svfg = nullptr;
 

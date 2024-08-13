@@ -7,6 +7,9 @@ void BlindedTTFC::FuncCloning(Module &M, ModuleAnalysisManager& AM) {
   bool changed = false;
   static int limit = 0;
   do {
+    std::time_t timestamp = std::time(nullptr);
+    errs() << std::asctime(std::localtime(&timestamp)) << "\nPerforming function cloning iteration no. " << limit << "\n";
+    errs().flush();
     auto& TR = AM.getResult<BlindedTaintTracking>(M);
     changed = false;
 
@@ -18,21 +21,34 @@ void BlindedTTFC::FuncCloning(Module &M, ModuleAnalysisManager& AM) {
       assert(CB && "SVF inserted nullptr callbase");
       CallBase* NCB = const_cast<CallBase*>(CB);
       errs() << "\n callbase: " << *CB << "\n";
-      if (NCB->isIndirectCall()) continue;
-      if (NCB->isInlineAsm()) continue;
+      if (NCB->isIndirectCall()) {
+        errs() << " Indirect call. Skipping...\n";
+        continue;
+      }
+      if (NCB->isInlineAsm()) {
+        errs() << " Inline asm. Skipping...\n";
+        continue;
+      }
+      if (!NCB->getCalledFunction()) {
+        errs() << "No called function?? Skipping...\n";
+        continue;
+      }
       if (!M.getFunction(NCB->getCalledFunction()->getName())) {
+        errs() << " Function name does not exist? Skipping...\n";
         continue;
       }
       if (NCB->getCalledFunction()->isDeclaration()) {
+        errs() << "Declaration. Skipping...\n";
         continue;
       }
       changed |= callBaseCloning(NCB, TR);
     }
 
     AM.invalidate(M, PreservedAnalyses::none());
-  } while (changed && limit <= 20);
+  } while (changed && limit < 20);
+  errs() << "Function cloning iterations complete\n";
   auto &TR = AM.getResult<BlindedTaintTracking>(M);
-
+  errs() << "Function cloning complete\n";
 }
 
 bool BlindedTTFC::callBaseCloning(CallBase *CB, TaintResult& TR) {
@@ -51,8 +67,8 @@ bool BlindedTTFC::callBaseCloning(CallBase *CB, TaintResult& TR) {
         ParamNos.push_back(n);
       }
       else if (Arg->getType()->isPointerTy()) {
-        SVF::NodeID pNodeId = TR.ander->getPAG()->getValueNode(Arg);
-        const SVF::NodeBS& pts = TR.ander->getPts(pNodeId);
+        SVF::NodeID pNodeId = (TR.ander ? TR.ander->getPAG() : TR.steens->getPAG())->getValueNode(Arg);
+        const SVF::NodeBS& pts = (TR.ander ? TR.ander->getPts(pNodeId) : TR.steens->getPts(pNodeId));
         for (auto it = pts.begin(); it != pts.end(); it++) {
           errs() << "\nAnalyzing vfgNode: " << *it << "\n";
           // if (!TR.svfg->hasVFGNode(*it)) {

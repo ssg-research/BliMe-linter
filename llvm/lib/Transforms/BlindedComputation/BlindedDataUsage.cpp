@@ -10,32 +10,74 @@ BlindedDataUsage::BlindedDataUsage(Module &M, ModuleAnalysisManager &AM) {
   int statBranch = 0;
 
 	for (auto Inst : TRS.BlndBr) {
-		// errs() << "invalid use of blinded data as operand of branchInst!\n";
-		// errs() << *Inst << "\n";
-    statBranch++;
+		errs() << "Invalid use of blinded data as operand of branchInst! " << statBranch << "\n";
+		errs() << *Inst << "\n";
+    if (auto I = dyn_cast<Instruction>(Inst))
+      if (auto loc = I->getDebugLoc()) {
+        loc.print(errs());
+        errs() << "\n";
+      }
     // Inst->print(errs());
+    errs() << "\n";
+    errs().flush();
+    statBranch++;
     std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("Invalid use of blinded data as operand of BranchInst!"));
+    Violations.insert(Violation_Instance);
+	}
+	for (auto Inst : TRS.BlndSelect) {
+		errs() << "Invalid use of blinded data as operand of selectInst! " << statBranch << "\n";
+		errs() << *Inst << "\n";
+    if (auto I = dyn_cast<Instruction>(Inst))
+      if (auto loc = I->getDebugLoc()) {
+        loc.print(errs());
+        errs() << "\n";
+      }
+    // Inst->print(errs());
+    errs() << "\n";
+    errs().flush();
+    statBranch++;
+    std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("Invalid use of blinded data as operand of SelectInst!"));
     Violations.insert(Violation_Instance);
 	}
   int statStore = 0, statLoad = 0;
 	for (auto Inst : TRS.BlndMemOp) {
 		if (isa<LoadInst>(Inst)) {
-			// errs() << "loadInstr with a blinded pointer!\n";
-			// errs() << *Inst << "\n";
-      statLoad++;
-      // if (auto LI = dyn_cast<LoadInst>(Inst)) {
-      //   const Value* lOperand = LI->getPointerOperand();
-      //   TRS.backtrace(lOperand);
-      // }
+			errs() << "loadInstr with a blinded pointer! " << statLoad << "\n";
+			errs() << *Inst << "\n";
+      if (auto I = dyn_cast<Instruction>(Inst))
+        if (auto loc = I->getDebugLoc()) {
+          loc.print(errs());
+          errs() << "\n";
+        }
+      errs() << "bt:\n";
+      if (auto LI = dyn_cast<LoadInst>(Inst)) {
+        const Value* lOperand = LI->getPointerOperand();
+        // TRS.backtrace(lOperand);
+      }
       // Inst->print(errs());
+      errs() << "\n";
+      errs().flush();
+      statLoad++;
       std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("LoadInst with a blinded pointer."));
       Violations.insert(Violation_Instance);
 		}
 		else if (isa<StoreInst>(Inst)) {
-      // errs() << "storeInstr with a blinded pointer!\n";
-			// errs() << *Inst << "\n";
-      statStore++;
+      errs() << "storeInstr with a blinded pointer! " << statStore << "\n";
+			errs() << *Inst << "\n";
+      if (auto I = dyn_cast<Instruction>(Inst))
+        if (auto loc = I->getDebugLoc()) {
+          loc.print(errs());
+          errs() << "\n";
+        }
+      errs() << "bt:\n";
+      if (auto SI = dyn_cast<StoreInst>(Inst)) {
+        const Value* lOperand = SI->getPointerOperand();
+        // TRS.backtrace(lOperand);
+      }
       // Inst->print(errs());
+      errs() << "\n";
+      errs().flush();
+      statStore++;
       std::pair<const Value *, StringRef> Violation_Instance(Inst, StringRef("StoreInst with a blinded pointer."));
       Violations.insert(Violation_Instance);
 		}
@@ -46,7 +88,6 @@ BlindedDataUsage::BlindedDataUsage(Module &M, ModuleAnalysisManager &AM) {
   errs() << "LoadInstr: " << statLoad << "\n";
   errs() << "BranchInstr: " << statBranch << "\n";
   errs() << "############stat info end###########" << "\n";
-
 
 }
 
