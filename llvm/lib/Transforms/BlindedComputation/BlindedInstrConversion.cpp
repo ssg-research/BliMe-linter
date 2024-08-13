@@ -391,18 +391,6 @@ bool BlindedInstrConversionPass::expandBlindedArrayAccesses(Function &F,
     if (GetElementPtrInst* GEPInstr = dyn_cast<GetElementPtrInst>(PO)) {
       errs() << "GEP " << *GEPInstr << "\n";
       for (auto Idx = GEPInstr->idx_begin(); Idx != GEPInstr->idx_end(); Idx++) {
-        // if (GEPInstr->getNumIndices() == 1) {
-        //   const llvm::DebugLoc &debugInfo = LI->getDebugLoc();
-        //   llvm::StringRef directory = debugInfo->getDirectory();
-        //   llvm::StringRef filePath = debugInfo->getFilename();
-        //   int line = debugInfo->getLine();
-        //   int column = debugInfo->getColumn();
-        //   errs() << "DEBUG INFO:" << "\n";
-        //   errs() << "FilePath: " << filePath << "\n";
-        //   errs() << "line: " << line << "\n";
-        //   errs() << "column: " << column << "\n";
-        //   RT.backtrace(GEPInstr);
-        // }
         if (RT.TaintedValues.count(*Idx)) {
           int valft = 0;
           // if (getTotalStride(&*Idx, GEP, valft));
@@ -524,50 +512,6 @@ void BlindedInstrConversionPass::transform(Module& M, ModuleAnalysisManager& AM)
 
 void BlindedInstrConversionPass::validate(Module& M, ModuleAnalysisManager& AM) {
   auto &BDU = AM.getResult<BlindedDataUsageAnalysis>(M);
-  // Verify our blinded data usage policies
-  if(!BDU.violations().empty()){
-      for (auto &V : BDU.violations()) {
-        // V.first->print(errs());
-        // const llvm::DebugLoc &debugInfo = ((llvm::Instruction*)(V.first))->getDebugLoc();
-        // errs() << "\n" <<debugInfo->getDirectory() << "/" << debugInfo->getFilename() << ":" << debugInfo->getLine() << ":" << debugInfo->getColumn() << ":\n";
-        // errs() << V.second.str().c_str() << "\n";
-      }
-      // llvm_unreachable("validateBlindedData returns 'false'");
-  }
-  
-  // std::error_code ec;
-  // raw_fd_ostream outFile("outbitcode.ll", ec);
-  // M.print(outFile, nullptr);
-
-  // auto &TTResult = AM.getResult<BlindedTaintTracking>(M);
-
-  // for (Function &F : M) {
-  //   if (F.isDeclaration()) {
-  //     continue;
-  //   }
-
-  //   for (auto Arg = F.arg_begin(); Arg < F.arg_end(); ++Arg) {
-  //     if (Arg->hasAttribute(Attribute::Blinded)) {
-  //         Arg->removeAttr(Attribute::Blinded);
-  //     }
-  //   }
-  // }
-  // for (auto I : TTResult.BlndBr) {
-  //   if (const BranchInst* BrInst = dyn_cast<BranchInst>(I)) {
-  //     BranchInst* NBrInst = const_cast<BranchInst*>(BrInst);
-  //     LLVMContext &cont = NBrInst->getContext();
-  //     MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
-  //     NBrInst->setMetadata("t", N);
-  //   }
-  // }
-  // for (auto I : TTResult.BlndMemOp) {
-  //   if (const Instruction* MemOpInstr = dyn_cast<Instruction>(I)) {
-  //     Instruction* NMemOpInstr = const_cast<Instruction*>(MemOpInstr);
-  //     LLVMContext &cont = NMemOpInstr->getContext();
-  //     MDNode *N = MDNode::get(cont, ConstantAsMetadata::get(ConstantInt::get(cont, APInt(sizeof(long)*8, true, true))));
-  //     NMemOpInstr->setMetadata("t", N);
-  //   }
-  // }
 }
 
 
@@ -584,71 +528,9 @@ PreservedAnalyses BlindedInstrConversionPass::run(Module &M,
 
   PassInstrumentation PI = AM.getResult<PassInstrumentationAnalysis>(M);
 
-  // transform(M, AM);
   validate(M, AM);
 
-  // errs() << "finished building TT...\n";
-
   PreservedAnalyses PA = PreservedAnalyses::all();
-  // std::unordered_map<const Function*, SmallPtrSet<Value*, 4>> TaintInfo;
-
-  // CallGraph CG = CallGraph(M);
-  // FunctionWorkList.clear();
-
-  // for (Function &F : M) {
-  //   if (F.isDeclaration()) {
-  //     continue;
-  //   }
-  //   FunctionWorkList.push_back(&F);
-  //   std::vector<Function*> CallingFuncVec;
-  //   DependentFunctions[&F] = CallingFuncVec;
-  // }
-
-  // for (auto ite = CG.begin(); ite != CG.end(); ite++) {
-  //   CallGraphNode* CGN = ite->second.get();
-  //   const Function* CallingFunc = ite->first;
-
-  //   if (CallingFunc && !CallingFunc->isDeclaration()) {
-
-  //     // errs() << "analyzing: " << CallingFunc->getName() << "\n";
-  //     // errs() << CGN->size() << "\n\n";
-
-  //     for (unsigned int i = 0; i < CGN->size(); i++) {
-  //       Function* CurrentCalledFunc = ((*CGN)[i])->getFunction();
-  //       if (!CurrentCalledFunc)
-  //         continue;
-  //       if (CurrentCalledFunc->isDeclaration())
-  //         continue;
-  //       // errs() << CurrentCalledFunc->getName() << "\n";
-  //       DependentFunctions[CallingFunc].push_back(CurrentCalledFunc);
-  //       TaintTrackingResult[CallingFunc] = -1;
-  //     }
-  //     // errs() << "\n\n";
-  //   }
-  // }
-
-  // while (!FunctionWorkList.empty()) {
-  //   Function *F = FunctionWorkList.back();
-  //   FunctionWorkList.pop_back();
-
-  //   if (F->isDeclaration())
-  //     continue;
-
-  //   if (!PI.runBeforePass<Function>(*this, *F))
-  //     continue;
-
-  //   PreservedAnalyses PassPA;
-  //   {
-  //     SmallSet<Function *, 8> VisitedFunctions;
-  //     TimeTraceScope TimeScope(name(), F->getName());
-  //     PassPA = run(*F, FAM, VisitedFunctions);
-  //   }
-
-  //   PI.runAfterPass(*this, *F);
-
-  //   FAM.invalidate(*F, PassPA);
-  //   PA.intersect(std::move(PassPA));
-  // }
 
   return PA;
 
